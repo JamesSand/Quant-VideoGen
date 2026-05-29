@@ -6,6 +6,7 @@ checkpoints/
 *.pth
 *.safetensors
 *.ckpt
+logs/
 
 # Results & outputs
 results/
