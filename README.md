@@ -16,7 +16,7 @@
 > **~7× smaller KV cache, ~85% less memory, no fine-tuning, no weight changes.** QuantVideoGen quantizes the KV cache of autoregressive video generators to **INT2** during inference and decompresses it on the fly at attention time — turning the cache from "the dominant memory cost of long video generation" into "an afterthought."
 
 <p align="center">
-  <img src="assets/qvg_figure1.png" width="95%" />
+  <img src="assets/qvg_teaser.png" width="95%" />
 </p>
 
 QuantVideoGen is a lightweight KV-cache quantization toolkit for autoregressive video generation. It compresses long-horizon attention cache during inference, with experiment integrations for LongCat-Video, Self-Forcing, HY-WorldPlay, and LingBot-World.
