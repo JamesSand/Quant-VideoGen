@@ -112,9 +112,9 @@ The table below reports KV-cache memory for the provided scripts. Numbers are in
 | HY-WorldPlay   | BF16 | ✗ |  990.00  | 29700.00 | 1.00x |
 | HY-WorldPlay   | INT2 | ✓ |  141.18  |  4235.45 | **7.01x** |
 | LingBot-World  | BF16 | ✗ |  883.59  | 35343.60 | 1.00x |
-| LingBot-World  | INT2 | ✓ |  121.43  |  4857.20 | **7.28x** |
+| LingBot-World  | INT2 | ✓ |  142.28  |  5691.20 | **6.21x** |
 
-Across these runs, QuantVideoGen consistently delivers **~7× KV-cache compression** and reduces total KV-cache memory by **about 85%**.
+Across these runs, QuantVideoGen consistently delivers **~6–7× KV-cache compression** and reduces total KV-cache memory by **about 85%**.
 
 <a id="citation"></a>
 
