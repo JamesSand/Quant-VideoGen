@@ -14,9 +14,9 @@ quant_type="triton-nstages-kmeans-int2"
 # quant_type="triton-nstages-kmeans-int4"
 cache_num_k_centroids=256
 cache_num_v_centroids=256
-kmeans_max_iters=2
-quant_block_size=64
-num_prq_stages=1
+kmeans_max_iters=4
+quant_block_size=16
+num_prq_stages=2
 
 quant_dir=${quant_type}_${quant_block_size}/kc_${cache_num_k_centroids}_vc_${cache_num_v_centroids}_nstages_${num_prq_stages}
 output_folder=results/lingbot/${quant_dir}

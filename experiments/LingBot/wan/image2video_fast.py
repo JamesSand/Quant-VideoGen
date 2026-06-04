@@ -609,9 +609,8 @@ class WanI2VFast:
             c2ws_plucker_emb_chunk = c2ws_plucker_emb.split(chunk_size, dim=2)
             num_inference_chunk = len(latents_chunk)
             pred_latent_chunks = []
-            mem_profile = os.getenv("MEM_PROFILE", "0") == "1"
             def _log_mem(tag):
-                if mem_profile and self.rank == 0:
+                if self.rank == 0:
                     torch.cuda.synchronize()
                     a = torch.cuda.memory_allocated() / 1024**3
                     p = torch.cuda.max_memory_allocated() / 1024**3
@@ -700,6 +699,7 @@ class WanI2VFast:
                            **kwargs)
 
             _log_mem("after chunk loop (pre-VAE)")
+            self._print_kv_cache_memory(self_kv_cache)
             pred_latent_chunks = torch.cat(pred_latent_chunks, dim=1)
 
             if dump_latents is not None and self.rank == 0:
@@ -723,8 +723,8 @@ class WanI2VFast:
 
         return videos[0] if self.rank == 0 else None
 
-    def _quantize_kv_cache(self, self_kv_cache, tokens_start: int, tokens_end: int, max_tokens: int):
-        """Compress KV cache span ``[tokens_start, tokens_end)`` in-place.
+    def _quantize_kv_cache(self, self_kv_cache, tokens_to_quantize_start: int, tokens_to_quantize_end: int, max_tokens: int):
+        """Compress KV cache span ``[tokens_to_quantize_start, tokens_to_quantize_end)`` in-place.
 
         Mirrors Self-Forcing's CausalInferencePipeline.quantize_kv_cache.
         Requires ChunkedKVCache storage; no-op when quant_type=='none'.
@@ -732,47 +732,94 @@ class WanI2VFast:
         from quant_videogen.compress import get_quantize_fn, compress_kv_cache
         from termcolor import cprint
 
-        qc = self.quant_config
-        if qc is None or getattr(qc, "quant_type", "none") == "none":
+        quant_config = self.quant_config
+        if quant_config is None or getattr(quant_config, "quant_type", "none") == "none":
+            self._print_kv_cache_memory(self_kv_cache)
             return
 
-        assert tokens_start <= max_tokens and tokens_end <= max_tokens, (
-            f"Tried to quantize [{tokens_start},{tokens_end}) but cache only "
+        assert tokens_to_quantize_start <= max_tokens and tokens_to_quantize_end <= max_tokens, (
+            f"Tried to quantize [{tokens_to_quantize_start},{tokens_to_quantize_end}) but cache only "
             f"has {max_tokens} written tokens"
         )
         if self.rank == 0:
             cprint(
-                f"Quantizing {tokens_end - tokens_start} tokens "
-                f"[{tokens_start}, {tokens_end}) of {max_tokens}",
+                f"Quantizing {tokens_to_quantize_end - tokens_to_quantize_start} tokens "
+                f"[{tokens_to_quantize_start}, {tokens_to_quantize_end}) of {max_tokens}",
                 "light_cyan",
             )
 
-        start_evt = torch.cuda.Event(enable_timing=True)
-        end_evt = torch.cuda.Event(enable_timing=True)
-        start_evt.record()
+        start_event = torch.cuda.Event(enable_timing=True)
+        end_event = torch.cuda.Event(enable_timing=True)
+        start_event.record()
 
         with torch.no_grad():
-            quantize_fn = get_quantize_fn(qc.quant_type, qc)
+            quantize_fn = get_quantize_fn(quant_config.quant_type, quant_config)
             for layer_idx, layer in enumerate(self_kv_cache):
+                k_cache = layer["k"]
+                v_cache = layer["v"]
                 # ChunkedKVCache stores BSHD; compress_kv_cache wants BHSD.
-                k_bshd = layer["k"].read(tokens_start, tokens_end)
-                v_bshd = layer["v"].read(tokens_start, tokens_end)
-                k = k_bshd.permute(0, 2, 1, 3).contiguous()
-                v = v_bshd.permute(0, 2, 1, 3).contiguous()
-                k_q, v_q = compress_kv_cache(k, v, qc.quant_type, qc, quantize_fn)
+                k = k_cache.read(tokens_to_quantize_start, tokens_to_quantize_end).permute(0, 2, 1, 3).contiguous()
+                v = v_cache.read(tokens_to_quantize_start, tokens_to_quantize_end).permute(0, 2, 1, 3).contiguous()
+                k_quant, v_quant = compress_kv_cache(k, v, quant_config.quant_type, quant_config, quantize_fn)
                 # Pack info so .read() can decompress on the fly.
-                if isinstance(k_q, dict) and isinstance(v_q, dict):
-                    info = {"output_dtype": k.dtype, "quant_config": qc}
-                    k_q["info"] = info
-                    v_q["info"] = info
-                layer["k"].store_quantized(tokens_start, tokens_end, k_q)
-                layer["v"].store_quantized(tokens_start, tokens_end, v_q)
+                if isinstance(k_quant, dict) and isinstance(v_quant, dict):
+                    info = {"output_dtype": k.dtype, "quant_config": quant_config}
+                    k_quant["info"] = info
+                    v_quant["info"] = info
+                k_cache.store_quantized(tokens_to_quantize_start, tokens_to_quantize_end, k_quant)
+                v_cache.store_quantized(tokens_to_quantize_start, tokens_to_quantize_end, v_quant)
 
-        end_evt.record()
+        end_event.record()
         torch.cuda.synchronize()
-        dt_ms = start_evt.elapsed_time(end_evt)
+        duration = start_event.elapsed_time(end_event)
         if self.rank == 0:
-            cprint(f"  quantize took {dt_ms / 1000:.2f}s", "light_cyan")
+            cprint(f"  quantize took {duration / 1000:.2f}s", "light_cyan")
+
+        # Mirror HY-WorldPlay's quantize_kv_cache: report the KV-cache footprint
+        # right after compressing a span, so the post-quant savings are visible.
+        self._print_kv_cache_memory(self_kv_cache)
+
+    def _print_kv_cache_memory(self, self_kv_cache):
+        """Isolate the self-attention KV cache's GPU footprint.
+
+        Offload every layer to CPU, then onload layer-by-layer, attributing
+        each ``memory_allocated`` increment to that layer. The median increment
+        times the layer count estimates total KV-cache memory, independent of
+        whatever else (model weights, activations) is resident. Mirrors
+        HY-WorldPlay's ``_print_memory_usage``; works for both ChunkedKVCache
+        and flat-tensor caches via the shared on/offload helpers.
+
+        Mutates ``self_kv_cache`` transiently but leaves every layer back on
+        the GPU on return, so it is only safe to call when the cache is no
+        longer needed for in-flight compute (e.g. after the chunk loop).
+        """
+        if self.rank != 0:
+            return
+        from termcolor import cprint
+        from quant_videogen.kv_cache import offload_kv_cache_layer, onload_kv_cache_layer
+
+        torch.cuda.empty_cache()
+        cuda_device = torch.device("cuda")
+
+        for layer in self_kv_cache:
+            offload_kv_cache_layer(layer)
+        torch.cuda.empty_cache()
+
+        memory_usage = [torch.cuda.memory_allocated() / 1024**2]
+        for layer in self_kv_cache:
+            onload_kv_cache_layer(layer, cuda_device)
+            memory_usage.append(torch.cuda.memory_allocated() / 1024**2)
+
+        peak_memory_usage = max(memory_usage)
+        diff_per_layer = [memory_usage[i + 1] - memory_usage[i] for i in range(len(memory_usage) - 1)]
+        per_layer_memory_usage = np.median(diff_per_layer)
+        total_kv_cache_memory_usage = per_layer_memory_usage * len(self_kv_cache)
+
+        cprint(
+            f"Peak Memory Usage: {peak_memory_usage:.2f} MB | Other Memory Usage: {memory_usage[0]:.2f} MB | "
+            f"Per Layer Memory Usage: {per_layer_memory_usage:.2f} MB | Total KV Cache Memory Usage: {total_kv_cache_memory_usage:.2f} MB",
+            "light_blue",
+        )
 
     def _initialize_self_kv_cache(self, num_layers, shape, dtype, device, frame_seqlen=None):
         """
