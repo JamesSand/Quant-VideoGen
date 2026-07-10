@@ -86,6 +86,19 @@
 | | QuaRot | 33.997 | 32.681 | −1.32 |
 | | QVG | 34.454 | 35.711 | +1.26 |
 
+### PSNR 随生成推进的衰减（折线图）
+
+每条实线 = 一个方法的量化 run 与 BF16 run 的逐段/逐块 PSNR（同窗、同 prompt/seed）；虚线 = paper Table 1 报告的对应数值。
+
+![LongCat per-segment PSNR trend](figs/lc_psnr_trend.png)
+
+![HY-WorldPlay per-chunk PSNR trend](figs/hy_psnr_trend.png)
+
+图读三点：
+1. **所有方法在第 1-3 段/块内快速衰减后饱和到 10-17 dB**——量化误差经自回归反馈进入内容级漂移后，PSNR 与量化精度基本脱钩（INT4 与 INT2 的饱和水平几乎相同）。
+2. **paper 的虚线全部悬在实测曲线上方**，且大致与"第 1 块附近"的实测水平相当（HY 的第 1 块实测 34-38 vs paper 33.6-34.5）——直观呈现了"Table 1 测的是漂移起点"这一结论。
+3. HY 的第 1 块（量化尚未生效）在 34-36 dB，是两条 run 的数值/编码噪声底；LC 的 QVG 全程略高于基线（红线在 4 段后高于蓝绿），但差距 ~1-2 dB，远小于 paper 声称的 7-8 dB。
+
 ## 二、机理（为何全视频 PSNR 不可能达到 Table 1）
 
 - INT2 量化后 V-cache 每次注意力读取带 ~45% 相对误差（**与 paper Fig 7 自报一致**——误差本身复现了）。
