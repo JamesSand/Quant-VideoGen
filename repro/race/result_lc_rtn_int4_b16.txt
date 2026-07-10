@@ -1,0 +1,2 @@
+START 2026-07-10_18:21:48 tag=lc_rtn_int4_b16 kind=lc bits=int4 block=16 sym=0 rot=0 host=zhizhousha-qvg-lc-rtn-int4-b16
+OK psnr=26.26 ssim=0.8721 lpips=0.0901

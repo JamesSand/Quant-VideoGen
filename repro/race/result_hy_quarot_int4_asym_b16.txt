@@ -1,0 +1,2 @@
+START 2026-07-10_18:21:47 tag=hy_quarot_int4_asym_b16 kind=hy bits=int4 block=16 sym=0 rot=1 host=zhizhousha-qvg-hy-quarot-int4-asym-b16
+OK psnr=21.87 ssim=0.6752 lpips=0.2088

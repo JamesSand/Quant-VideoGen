@@ -1,0 +1,2 @@
+START 2026-07-10_18:21:48 tag=lc_quarot_int2_sym_b16 kind=lc bits=int2 block=16 sym=1 rot=1 host=zhizhousha-qvg-lc-quarot-int2-sym-b16
+OK psnr=18.93 ssim=0.6871 lpips=0.2385

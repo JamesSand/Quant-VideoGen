@@ -97,6 +97,39 @@ LongCat segment_10（93 init + 200 生成帧，评测后 200 帧）：
 
 ⚠️ 注：README/paper 的 HY 压缩率把 56 帧上下文的 bf16（990 MB/层）与 48 帧上下文的 qvg（141.18）相除——几何不匹配的口径。同几何（48 帧，825.00 MB/层）比率为 5.84×。这是仓库自带脚本参数不一致的直接后果，与 §三 的测量口径问题相互印证。
 
+## 四-bis、QuaRot/RTN 基线复现（k8s 集群，12 配置，每配置独占 1×H100）
+
+QuaRot 官方仓库（spcl/QuaRot）只支持 LLaMA；QVG 仓库中无任何 QuaRot/KIVI 代码（工作区 + git 全历史零命中）。我们按 QVG paper 的基线描述（"only its KV cache quantization part... block size 16"）做了数学等价的移植（`repro/quarot_quant.py`：head_dim Hadamard 正交旋转 → 分块非对称 RTN → 反旋转；单元测试验证旋转恒等 6e-8、离群数据增益 1.2×）。RTN = 仓库自带 `naive-int*`。
+
+**LongCat（seg1 协议，skip 93）：**
+
+| 配置 | 本地 PSNR | Paper Table 1 | Δ |
+|---|---:|---:|---:|
+| QuaRot INT2 非对称 B16（paper 配置） | 17.72 | 21.573 | −3.9 |
+| QuaRot INT2 对称 B16 | 18.93 | — | |
+| QuaRot INT2 非对称 B128（QuaRot 官方分组） | 17.14 | — | |
+| QuaRot INT4 非对称 B16（paper 配置） | 20.45 | 33.744 | **−13.3** |
+| QuaRot INT4 对称 B16 | 21.09 | — | |
+| QuaRot INT4 非对称 B128 | 18.81 | — | |
+| RTN INT2 B16 | 16.47 | 20.872 | −4.4 |
+| RTN INT4 B16 | **26.26** | 32.984 | −6.7 |
+
+**HY-WorldPlay（matched 几何，全程 189 帧）：**
+
+| 配置 | 本地 PSNR | Paper | Δ |
+|---|---:|---:|---:|
+| QuaRot INT2 非对称 B16 | 19.21 | 25.207 | −6.0 |
+| QuaRot INT4 非对称 B16 | 21.87 | 33.997 | −12.1 |
+| RTN INT2 B16 | 17.95 | 24.199 | −6.2 |
+| RTN INT4 B16 | 21.49 | 33.634 | −12.1 |
+
+**结论：**
+1. **绝对值全部无法复现**（−2.6 ~ −13.3 dB），通胀模式与 QVG 自身完全同型（INT4 行通胀最大）→ 进一步确证 Table 1 的绝对值来自未公开的评测协议，且对所有方法一致存在。
+2. **INT2 相对排序可复现**：QuaRot > RTN 约 1-2.5 dB（LC: 17.7/18.9 vs 16.5；HY: 19.2 vs 18.0），与 paper 的 ~1 dB 方向一致——paper 的"QuaRot 分数低"在相对意义上是真实的（旋转对视频 KV 帮助有限）。
+3. **HY 的 INT4 排序也复现**（QuaRot 21.87 vs RTN 21.49，+0.38；paper +0.36——惊人地一致）。
+4. **LC 的 INT4 排序反转**：本地 RTN (26.26) 比 QuaRot (20.5-21.1，三个变体全部) 高 ~6 dB，paper 却是 QuaRot 高 0.76 dB。机理（张量级单元测试佐证）：Hadamard 旋转把视频 KV 的平滑通道结构同质化，在 INT4 精度下弊大于利（平滑数据 rel-err：RTN 0.053 < QuaRot 0.065）；只有 INT2 下"驯服动态范围"的收益才压过同质化损失。paper 的 LC QuaRot INT4 分数偏高，或其未发布移植与描述不符。
+5. 全部 12 个 run 在 k8s 集群独占 GPU 上完成（本地 8 卡被 charlie 的 privileged serving pod 物理占用，见 memory）；含失败重试共 27 次生成尝试，远超 10 次要求。
+
 ## 五、Self-Forcing（paper 无 PSNR 数字，链路验证用）
 
 - bf16 vs INT2 (prompt 0, skip 93)：16.33 dB；分叉点精确在 frame 93（首个量化事件，QUANT_FACTOR=8）。

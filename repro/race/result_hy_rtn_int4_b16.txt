@@ -1,0 +1,2 @@
+START 2026-07-10_18:21:47 tag=hy_rtn_int4_b16 kind=hy bits=int4 block=16 sym=0 rot=0 host=zhizhousha-qvg-hy-rtn-int4-b16
+OK psnr=21.49 ssim=0.6467 lpips=0.2350

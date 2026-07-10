@@ -1,0 +1,2 @@
+START 2026-07-10_18:35:24 tag=lc_quarot_int2_asym_b16 kind=lc bits=int2 block=16 sym=0 rot=1 host=zhizhousha-qvg-lc-quarot-int2-asym-b16 node=research-common-h100-116.cloud.together.ai
+OK psnr=17.72 ssim=0.6684 lpips=0.2477
