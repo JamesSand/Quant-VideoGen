@@ -130,6 +130,22 @@ QuaRot 官方仓库（spcl/QuaRot）只支持 LLaMA；QVG 仓库中无任何 Qua
 4. **LC 的 INT4 排序反转**：本地 RTN (26.26) 比 QuaRot (20.5-21.1，三个变体全部) 高 ~6 dB，paper 却是 QuaRot 高 0.76 dB。机理（张量级单元测试佐证）：Hadamard 旋转把视频 KV 的平滑通道结构同质化，在 INT4 精度下弊大于利（平滑数据 rel-err：RTN 0.053 < QuaRot 0.065）；只有 INT2 下"驯服动态范围"的收益才压过同质化损失。paper 的 LC QuaRot INT4 分数偏高，或其未发布移植与描述不符。
 5. 全部 12 个 run 在 k8s 集群独占 GPU 上完成（本地 8 卡被 charlie 的 privileged serving pod 物理占用，见 memory）；含失败重试共 27 次生成尝试，远超 10 次要求。
 
+### 六方"首个生成帧"检验（LC，frame 94 vs Table 1）
+
+基线视频到位后，"首帧窗口"假设可用 6 个数字联合检验（此前仅有 QVG INT2 一个支撑点）：
+
+| 方法 | frame 94 | Paper | Δ |
+|---|---:|---:|---:|
+| QVG INT2 | 29.36 | 28.716 | +0.64 ✅ |
+| RTN INT2 | 21.85 | 20.872 | +0.98 ✅ |
+| QuaRot INT4 | 33.04 | 33.744 | −0.70 ✅ |
+| RTN INT4 | 35.23 | 32.984 | +2.24 🟡 |
+| QVG INT4 | 33.59 | 37.141 | −3.55 ❌ |
+| QuaRot INT2 | 30.38 | 21.573 | +8.80 ❌❌ |
+
+- 3/6 在 1 dB 内、4/6 在 2.3 dB 内命中——三个不同方法在同一帧位置同时逼近各自目标，"paper 测量位于漂移起点附近"从单点猜想升级为多点支撑的最优解释。
+- 但 QVG INT4（−3.6）与 QuaRot INT2（+8.8，**我们的移植首帧表现远好于 paper 报的值**）表明：或 paper 各行窗口不统一，或其未发布的 QuaRot 移植（post-RoPE 旋转 / 对称量化等差异）明显弱于我们按其描述所做的移植。两者无法进一步区分——需作者提供评测脚本。
+
 ## 五、Self-Forcing（paper 无 PSNR 数字，链路验证用）
 
 - bf16 vs INT2 (prompt 0, skip 93)：16.33 dB；分叉点精确在 frame 93（首个量化事件，QUANT_FACTOR=8）。
