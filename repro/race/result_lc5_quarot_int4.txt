@@ -1,0 +1,2 @@
+START 2026-07-10_19:04:53 tag=lc5_quarot_int4 bits=int4 block=16 sym=0 rot=1 nseg=5 node=research-common-h100-058.cloud.together.ai
+OK segments=5

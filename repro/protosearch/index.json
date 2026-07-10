@@ -1,0 +1,78 @@
+{
+ "lc_quarot_int2_asym_b16": {
+  "frames": 113,
+  "src": "results/quarot/lc_quarot_int2_asym_b16/1-0/segment_1.mp4"
+ },
+ "lc_quarot_int2_sym_b16": {
+  "frames": 113,
+  "src": "results/quarot/lc_quarot_int2_sym_b16/1-0/segment_1.mp4"
+ },
+ "lc_quarot_int2_asym_b128": {
+  "frames": 113,
+  "src": "results/quarot/lc_quarot_int2_asym_b128/1-0/segment_1.mp4"
+ },
+ "lc_quarot_int4_asym_b16": {
+  "frames": 113,
+  "src": "results/quarot/lc_quarot_int4_asym_b16/1-0/segment_1.mp4"
+ },
+ "lc_quarot_int4_sym_b16": {
+  "frames": 113,
+  "src": "results/quarot/lc_quarot_int4_sym_b16/1-0/segment_1.mp4"
+ },
+ "lc_quarot_int4_asym_b128": {
+  "frames": 113,
+  "src": "results/quarot/lc_quarot_int4_asym_b128/1-0/segment_1.mp4"
+ },
+ "lc_rtn_int2_b16": {
+  "frames": 113,
+  "src": "results/quarot/lc_rtn_int2_b16/1-0/segment_1.mp4"
+ },
+ "lc_rtn_int4_b16": {
+  "frames": 113,
+  "src": "results/quarot/lc_rtn_int4_b16/1-0/segment_1.mp4"
+ },
+ "lc_qvgpro_int2": {
+  "frames": 113,
+  "src": "results/diag/pro_int2/1-0/segment_1.mp4"
+ },
+ "lc_qvg_int2_rngiso": {
+  "frames": 293,
+  "src": "results/longcat_rngiso/triton-nstages-kmeans-int2_64/kc_256_vc_256/nstages_1_iters_100/1-0/segment_10.mp4"
+ },
+ "lc_qvg_int4_rngiso": {
+  "frames": 293,
+  "src": "results/longcat_rngiso/triton-nstages-kmeans-int4_64/kc_256_vc_256/nstages_1_iters_100/1-0/segment_10.mp4"
+ },
+ "lc_qvg_int2_released": {
+  "frames": 293,
+  "src": "results/longcat/triton-nstages-kmeans-int2_64/kc_256_vc_256/nstages_1_iters_100/1-0/segment_10.mp4"
+ },
+ "lc_qvg_int4_released": {
+  "frames": 293,
+  "src": "results/longcat/triton-nstages-kmeans-int4_64/kc_256_vc_256/nstages_1_iters_100/1-0/segment_10.mp4"
+ },
+ "hy_qvg_int2": {
+  "frames": 189,
+  "src": "results/hyworldplay/triton-nstages-kmeans-int2_64/kc_256_vc_256_nstages_1/0-0.mp4"
+ },
+ "hy_qvg_int4": {
+  "frames": 189,
+  "src": "results/hyworldplay/triton-nstages-kmeans-int4_64/kc_256_vc_256_nstages_1/0-0.mp4"
+ },
+ "hy_quarot_int2": {
+  "frames": 189,
+  "src": "results/quarot/hy_quarot_int2_asym_b16/0-0.mp4"
+ },
+ "hy_quarot_int4": {
+  "frames": 189,
+  "src": "results/quarot/hy_quarot_int4_asym_b16/0-0.mp4"
+ },
+ "hy_rtn_int2": {
+  "frames": 189,
+  "src": "results/quarot/hy_rtn_int2_b16/0-0.mp4"
+ },
+ "hy_rtn_int4": {
+  "frames": 189,
+  "src": "results/quarot/hy_rtn_int4_b16/0-0.mp4"
+ }
+}
