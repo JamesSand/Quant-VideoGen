@@ -24,6 +24,22 @@
 
 ### 文档协议下的视频 PSNR（0/13 对上）
 
+**缩写说明：**
+
+| 缩写 | 含义 |
+|---|---|
+| **LC** | LongCat-Video-13B（文生视频，480p，逐段续写：73 帧条件窗 → 每段生成 20 新帧） |
+| **HY** | HY-WorldPlay-8B（图+动作条件的世界模型，480p，12 chunks → 189 帧） |
+| **INT2 / INT4** | KV-cache 量化位宽（2-bit：每值 4 个量化等级；4-bit：16 个等级） |
+| **RTN** | Round-To-Nearest——最朴素的分块四舍五入量化基线（仓库自带 `naive-int*`，块大小 16） |
+| **QuaRot** | 基于 Hadamard 旋转的量化基线（arXiv:2404.00456；仓库无实现，为我们按 paper 描述做的移植：旋转 K/V → 分块非对称 RTN，块 16） |
+| **QVG** | 论文主方法 Quant VideoGen：1 阶段 k-means 语义平滑 + 残差量化（S=1，块 64，256 质心，即 `triton-nstages-kmeans-int*`） |
+| **QVG-Pro** | QVG 的高质量档：4 阶段渐进残差量化 + 块 16（压缩率更低、误差更小） |
+| **Paper Table 1** | 论文 Table 1 报告的 PSNR（dB） |
+| **本地实测** | 本机复现值：量化 KV-cache 的生成视频 vs BF16 KV-cache 的生成视频（同模型/prompt/seed），逐帧 PSNR 取平均 |
+| **Δ** | 本地实测 − Paper（dB），负值 = 本地低于论文 |
+| **第 N 段 / 生成帧** | LC 逐段生成，每段 20 帧；评测时跳过与基线完全相同的 93 帧初始条件视频，只比生成的新帧 |
+
 按论文文档协议测量（量化 run vs BF16 run，逐帧 PSNR 平均，skip 93 帧共享前缀）。同一 block 内所有方法**严格同窗**（同一 prompt/seed/基线/评测器/帧范围），可直接横向比较：
 
 | Block（测量窗口） | 方法 | Paper Table 1 | 本地实测 | Δ |
