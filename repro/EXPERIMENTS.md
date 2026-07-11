@@ -87,6 +87,15 @@ uv pip install ".../flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp312-...whl"
 - 结果（详见 REPORT.md §一.3）：LC INT2 单帧窗口 [93,94) 四方法同时命中（最坏 0.98 dB，QVG 0.002）；HY INT4 [0,32) 1.39；LC INT4 [78,102) 2.45；HY INT2 [23,36) 2.55。扩窗至 193 帧不改善。
 - 六方首帧检验（引出搜索的中间结果）：frame94 上 QVG INT2 +0.64 / RTN INT2 +0.98 / QuaRot(非对称) INT2 **+8.8** / QuaRot INT4 −0.70 / RTN INT4 +2.24 / QVG INT4 −3.55 → 非对称 QuaRot 与 paper 不符，对称变体 −0.16 相符。
 
+## 6-bis. 生成长度极限实验
+
+- 方法：每模型 bf16 + INT2 各一条，从提议尺寸起 OOM 自动降档（`repro/pod_run_limit.sh`），能跑通的最大尺寸即实测极限；全部在集群 1-GPU pod 上执行。
+- 阶梯记录：SF bf16 228→210→**195✓**；SF INT2 900→720→**600✓**；HY bf16 26→24→22→（细档）20✓；HY INT2 60→**52✓**；LongCat 70 段直接跑通（bf16/INT2 双双 1493 帧）。
+- OOM 根因取证：SF INT2 死于 `causal_rope_apply_long_input`（71.9GB 实分配，碎片仅 4.25GB——真实墙）；HY INT2 初次死于碎片（15.9GB reserved-unallocated，`expandable_segments:True` 缓解后仍在 60 chunks 撞读取瞬态墙）。证明瓶颈在"整段反量化 + 全量 RoPE"的读取瞬态，非 cache 存储。
+- Self-Forcing 限定：>180 latent 需 `local_attn_size = num_output_frames`（代码不支持窗口淘汰，prerope 路径越界即 ValueError）；输出帧数=4L−3。
+- HY 限定：`num_chunk ≤ memory_frames/4`（越界触发非连续记忆断言）；噪声缓冲默认 241 latent（`--num_frames 961`）为设计上限；动作序列每条目 8 latent。
+- 视频收纳：`limit_videos/`（含 README 索引）；原始输出 `results/limits/`。
+
 ## 7. 基础设施：k8s 实验流水线
 
 - 本机 8 卡长期被同节点其他租户的 privileged pod（`charlie/glm52bo-worker`，sglang 服务，绕过调度器不申报 `nvidia.com/gpu`）物理占用；本地抢跑失败两轮（外部调度在 ~3 分钟内回填空卡，我们模型加载要 5-13 分钟）。

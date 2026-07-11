@@ -1,0 +1,4 @@
+START 2026-07-11_07:33:05 cfg=hy_int2 node=research-common-h100-105.cloud.together.ai
+OOM_AT chunks=60, stepping down
+LIMIT chunks=52
+OK frames=829 Peak Memory Usage: 36172.56

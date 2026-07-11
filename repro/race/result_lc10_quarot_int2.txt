@@ -1,0 +1,2 @@
+START 2026-07-10_21:13:49 tag=lc10_quarot_int2 bits=int2 block=16 sym=0 rot=1 nseg=10 node=research-common-h100-057.cloud.together.ai
+OK segments=10

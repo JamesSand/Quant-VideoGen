@@ -1,0 +1,2 @@
+START 2026-07-10_21:13:45 tag=lc10_rtn_int2 bits=int2 block=16 sym=0 rot=0 nseg=10 node=research-common-h100-058.cloud.together.ai
+OK segments=10

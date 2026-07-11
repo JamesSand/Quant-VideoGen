@@ -1,0 +1,5 @@
+START 2026-07-11_06:53:14 cfg=sf_bf16 node=research-common-h100-058.cloud.together.ai
+OOM_AT latents=228, stepping down
+OOM_AT latents=210, stepping down
+LIMIT latents=195
+OK frames=777 Peak Memory Usage: 66690.18

@@ -1,0 +1,3 @@
+START 2026-07-11_07:26:33 cfg=hy_bf16 node=research-common-h100-058.cloud.together.ai
+LIMIT chunks=20
+OK frames=317 Peak Memory Usage: 59322.11

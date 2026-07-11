@@ -115,6 +115,18 @@
 3. README 的 HY 压缩率 7.01× 混用了两种上下文几何（同几何实为 5.84×）；paper 声称的 centroid caching 在发布代码中未接线；仓库不含任何 QuaRot/KIVI 实现。
 4. fullkv（增长上下文）场景下 BF16 基线在 80GB H100 上 OOM 而 INT2 正常运行——paper 的内存价值主张成立。
 
+## 三-bis、生成长度极限实测（80GB H100 单卡，OOM 自动降档定界）
+
+| 模型 | bf16 实测极限 | INT2 实测极限 | 解锁倍数 | 视频 |
+|---|---|---|---:|---|
+| LongCat-Video | 1493 帧 / 99.5s（滑窗设计**无显存上限**，本次跑 70 段，峰值 59.5GB） | 同长峰值仅 41.0GB | 时间换长度 | `limit_videos/longcat_*` |
+| Self-Forcing | **777 帧 / 48.6s**（195 latent，峰值 66.7GB；228/210 OOM） | **2397 帧 / 2 分 30 秒**（600 latent，峰值 37GB；720 OOM） | **3.1×** | `limit_videos/selfforcing_*` |
+| HY-WorldPlay | **317 帧 / 19.8s**（20 chunks，峰值 59.3GB；22+ OOM） | **829 帧 / 51.8s**（52 chunks，峰值 36.2GB；60 OOM） | **2.6×** | `limit_videos/hyworldplay_*` |
+
+**工程发现（对 paper 内存主张的重要限定）**：INT2 的实际长度解锁是 **~3×，不是存储压缩比的 7×**。原因：发布实现的注意力读取路径在每次读取时把整段量化历史**反量化回 bf16 并全量重应用 RoPE**（SF `causal_rope_apply_long_input`、HY 的 `torch.cat[value_rope, value_prope]` 都是实测 OOM 现场），该瞬态按全长 bf16 计价并随长度线性增长，成为取代存储的新瓶颈。若实现分块/流式反量化，解锁比例可逼近 7×——这是一个明确的工程改进方向。
+
+另一个方向的验证：LongCat 滑窗模式下 bf16/INT2 都能无限延长（差别是 INT2 峰值省 18.5GB、跑得更快），INT2 的价值在**全历史（fullkv）**场景——那里 bf16 在 153 帧上下文即 OOM（见 EXPERIMENTS.md §4）。
+
 ## 四、建议
 
 - **采用决策**：QVG 的 ~7× 内存收益真实可复现；"near-lossless" 质量声明应按"起点保真度 + VBench 感知指标"理解，长视频轨迹与 BF16 的逐像素一致性会随长度衰减（这是自回归+量化的共性，非 QVG 特有缺陷）。

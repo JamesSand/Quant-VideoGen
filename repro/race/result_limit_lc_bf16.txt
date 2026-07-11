@@ -1,0 +1,2 @@
+START 2026-07-11_06:53:19 cfg=lc_bf16 node=research-common-h100-057.cloud.together.ai
+OK frames=1493 Peak Memory Usage: 59517.40
