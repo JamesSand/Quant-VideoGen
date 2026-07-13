@@ -1,0 +1,2 @@
+START 2026-07-13_22:08:29 tag=var_quarot_sym16_run3 node=research-common-h100-057.cloud.together.ai
+OK

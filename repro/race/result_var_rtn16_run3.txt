@@ -1,0 +1,2 @@
+START 2026-07-13_22:08:32 tag=var_rtn16_run3 node=research-common-h100-014.cloud.together.ai
+OK

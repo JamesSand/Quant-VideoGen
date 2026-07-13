@@ -1,0 +1,2 @@
+START 2026-07-13_21:29:33 tag=qclip_int2_r0.975 bits=int2 ratio=0.975 pct=100 node=research-common-h100-125.cloud.together.ai
+OK
