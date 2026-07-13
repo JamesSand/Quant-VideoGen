@@ -53,6 +53,26 @@
 3. **深裁仍有害但损伤模式质变**：ratio≤0.95 单调受损（INT4 在 0.95→0.975 之间有 ~6.8 dB 断崖），但对比原始 KV 裁剪的"主体变幽灵"，旋转后即使裁到 0.85（23.85）**画面主体完好**、只有弥散性细节漂移——首帧对比图（`first_frames/_contact_sheet_int{2,4}_qclip.png`）直观呈现了"旋转保护单点信息"的效应。
 4. INT2 新最优（QuaRot+clip 30.68）与 QVG-Pro（31.03）只差 0.35 dB，而压缩率更高（6.40× vs 4.97×）——**"旋转+轻裁"在压缩-质量权衡上已与论文最强档位可比**。
 
+### 各 run 的首个生成帧（可视化）
+
+带 PSNR 标注的总览图（每格 = 一个扫描点的 frame 93）：
+
+**INT2 全部扫描点：**
+
+![INT2 first frames](first_frames/_contact_sheet_int2_qclip.png)
+
+**INT4 全部扫描点：**
+
+![INT4 first frames](first_frames/_contact_sheet_int4_qclip.png)
+
+单帧原图（点开看细节）：
+
+| 组 | INT2 | INT4 |
+|---|---|---|
+| 参照 | [BF16](first_frames/bf16_reference.png) · [无clip基线](first_frames/int2_noclip.png) | [无clip基线](first_frames/int4_noclip.png) |
+| ratio | [0.99](first_frames/int2_ratio0.99.png) · [0.975](first_frames/int2_ratio0.975.png) · [0.95](first_frames/int2_ratio0.95.png) · [0.925](first_frames/int2_ratio0.925.png) · [0.90](first_frames/int2_ratio0.90.png) · [0.85](first_frames/int2_ratio0.85.png) | [0.99](first_frames/int4_ratio0.99.png) · [0.975](first_frames/int4_ratio0.975.png) · [0.95](first_frames/int4_ratio0.95.png) · [0.925](first_frames/int4_ratio0.925.png) · [0.90](first_frames/int4_ratio0.90.png) · [0.85](first_frames/int4_ratio0.85.png) |
+| pct | [99.9](first_frames/int2_pct99.9.png) · [99.7](first_frames/int2_pct99.7.png) · [99.5](first_frames/int2_pct99.5.png) · [99.0](first_frames/int2_pct99.0.png) | [99.9](first_frames/int4_pct99.9.png) · [99.7](first_frames/int4_pct99.7.png) · [99.5](first_frames/int4_pct99.5.png) · [99.0](first_frames/int4_pct99.0.png) |
+
 ## 关联研究
 
 - [CLIP_STUDY.md](../CLIP_STUDY.md)：纯丢弃式离群值裁剪严格有害（裁 0.1% 即损失 2.6~7.2 dB）→ 离群值是信号
