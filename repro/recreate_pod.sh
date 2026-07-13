@@ -11,7 +11,7 @@ export PATH=/home/zhizhousha/workspace/low-precision-project/k8s-from-h100-pod/b
 touch $REPRO/race/bad_nodes.txt
 BAD=$(sort -u $REPRO/race/bad_nodes.txt | sed 's/^/                - /')
 
-PODNAME=zhizhousha-qvg-$(echo $TAG | tr '_' '-')
+PODNAME=zhizhousha-qvg-$(echo $TAG | tr '_.' '--')
 kubectl delete pod $PODNAME --ignore-not-found --wait=true
 
 # regenerate manifest with NODE_NAME env + anti-affinity for bad nodes
