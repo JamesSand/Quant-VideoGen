@@ -1,6 +1,6 @@
 # Report 2026-07-13：首帧口径下的全方法量化对比
 
-> 协议：**首个生成帧 PSNR**——LongCat seg1 输出的帧索引 93（93 帧共享初始视频之后的第一个新生成帧），量化 run vs BF16 run，同 prompt（滑板手, prompt_idx=1）/同 seed(0)/同评测器。该口径测的是"量化误差刚注入注意力、未被自回归混沌放大"的纯净信号，也是与 paper Table 1 数字吻合的口径（见 [REPORT.md](REPORT.md) §一.3）。
+> 协议：**首个生成帧 PSNR**——LongCat seg1 输出的帧索引 93（93 帧共享初始视频之后的第一个新生成帧），量化 run vs BF16 run，同 prompt（滑板手, prompt_idx=1）/同 seed(0)/同评测器。该口径测的是"量化误差刚注入注意力、未被自回归混沌放大"的纯净信号，也是与 paper Table 1 数字吻合的口径（见 [REPORT.md](../REPORT.md) §一.3）。
 > QuaRot 为本项目移植（官方无发布实现，`quarot_quant.py`：Hadamard 旋转 + 分块 RTN，无 clip，等价官方默认 clip_ratio=1.0）；RTN 为仓库自带 `naive-int*`；QVG/QVG-Pro 为论文原方法。
 
 ## 总表（LongCat，frame 93，dB）
@@ -28,9 +28,9 @@
 
 ## 关联研究
 
-- [CLIP_STUDY.md](CLIP_STUDY.md)：纯丢弃式离群值裁剪严格有害（裁 0.1% 即损失 2.6~7.2 dB）→ 离群值是信号
-- [ROPE_DISPERSION.md](ROPE_DISPERSION.md)：旋转类操作为何伤害视频 KV 的可聚类结构（推导+实测）
-- [REPORT.md](REPORT.md)：复现总报告（协议定位、压缩率验证、长度极限）
+- [CLIP_STUDY.md](../CLIP_STUDY.md)：纯丢弃式离群值裁剪严格有害（裁 0.1% 即损失 2.6~7.2 dB）→ 离群值是信号
+- [ROPE_DISPERSION.md](../ROPE_DISPERSION.md)：旋转类操作为何伤害视频 KV 的可聚类结构（推导+实测）
+- [REPORT.md](../REPORT.md)：复现总报告（协议定位、压缩率验证、长度极限）
 
 ## 数据来源
 
