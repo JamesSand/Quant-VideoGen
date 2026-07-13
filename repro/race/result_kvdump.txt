@@ -1,0 +1,2 @@
+START 2026-07-13_09:21:23 node=research-common-h100-057.cloud.together.ai
+OK dump=results/ropestudy/kv_cache_frames180.pt size=49G

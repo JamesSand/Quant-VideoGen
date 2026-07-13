@@ -1,0 +1,2 @@
+START 2026-07-13_08:45:50 tag=clip_int2_p93 node=research-common-h100-055.cloud.together.ai
+OK

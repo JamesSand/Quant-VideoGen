@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: zhizhousha-qvg-clip-int2-p100
+  labels:
+    owner: zhizhousha
+    purpose: qvg-clipsweep
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    node-group: default
+  runtimeClassName: nvidia
+  containers:
+  - name: main
+    image: nvcr.io/nvidia/pytorch:25.11-py3
+    command:
+    - bash
+    - -lc
+    - bash /home/zhizhousha/workspace/video-project/Quant-VideoGen/repro/pod_run_clip.sh
+      int2 100
+    workingDir: /home/zhizhousha
+    env:
+    - name: HOME
+      value: /home/zhizhousha
+    - name: HF_HOME
+      value: /shared/huggingface
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    resources:
+      requests:
+        cpu: '12'
+        memory: 96Gi
+        nvidia.com/gpu: '1'
+      limits:
+        cpu: '12'
+        memory: 96Gi
+        nvidia.com/gpu: '1'
+    volumeMounts:
+    - name: home
+      mountPath: /home/zhizhousha
+    - name: shared
+      mountPath: /shared
+    - name: shm
+      mountPath: /dev/shm
+  volumes:
+  - name: home
+    persistentVolumeClaim:
+      claimName: home-zhizhousha
+  - name: shared
+    persistentVolumeClaim:
+      claimName: shared-data
+  - name: shm
+    emptyDir:
+      medium: Memory
+      sizeLimit: 64Gi
