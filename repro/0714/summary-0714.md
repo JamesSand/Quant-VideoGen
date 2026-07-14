@@ -125,7 +125,29 @@ MIT/Nunchaku/NVIDIA）发现把它直搬视频扩散会崩，并给出诊断：*
 | 轴 | 谁在变 | 实测/文献结论 |
 |---|---|---|
 | **视频位置轴**（帧 0 → 帧 180，我们的开头/中间/结尾分析） | KV cache 存量 | **平稳**（上图）→ 一套量化参数/质心全程适用 |
-| **去噪 timestep 轴**（step 0 → step T，DeltaQuant 的 Fig.4） | 激活 / Q（每步重算） | **剧变**（DeltaQuant 的诊断 + 我们对 activation 的观察） |
+| **去噪 timestep 轴**（step 0 → step T，DeltaQuant 的 Fig.4） | 激活 / Q/K/V 投影（每步重算） | **张量相关的漂移**（下图，我们的实测）|
+
+**timestep 轴的实测**（SF，同一 block 在全部去噪 forward 的 Q/K/V per-channel 曲线，
+每步一条线；SF 每 block = 4 去噪步 [t=1000/750/500/250] + 1 次干净上下文重编码）：
+
+![timestep dynamics](figs/qkv_timestep_dynamics.png)
+
+- **V 是模式级剧变**：corr(首步, 末步) ≈ **0.33**（两层都是），中位 norm 随去噪推进单调降
+  1.5×——DeltaQuant 的诊断在 V 上完全成立；
+- **中层 Q/K 中度漂移**：corr ≈ 0.64-0.66，离群通道的幅值随步伸缩数倍（模式部分重排）；
+- **但最大的结构性离群是跨步静态的**：L29 那两根巨型通道（H9 ch95/49）corr = 0.95-0.99，
+  每一步都在原位、等高。
+- **对 KV cache 量化的好消息**：SF 的 cache 最终存的是**去噪完成后干净上下文重编码**那一次
+  forward 的 K/V（timestep≈0，写入时机固定）——步间漂移不污染被量化的 cache。漂移真正
+  打击的是**激活侧**方案（W4A4、Q 量化、逐步的 fake-quant proxy）。
+
+**回答"image 为什么没事"**（关键辨析）：image 扩散同样多步、激活同样随步变——这在
+Q-Diffusion/PTQ4DM（2023）就是已知问题。SVDQuant 能在 image 上活，是因为它的激活量化
+本身是**运行时逐 token 动态 scale**（幅度级变化被自动吸收），静态的只有 per-channel
+smoothing 因子 λ——只要离群通道的**身份和相对比例**跨步稳定（image 大体如此），λ 就有效。
+video 的问题（DeltaQuant Fig.4 + 我们上图的 V/中层 Q/K）是**模式级**变化：通道模式本身
+重排，任何静态 per-channel 向量都无法同时适配。DeltaQuant 论文没有给出 image 侧的对照
+（我们检索确认），这一辨析是我们补的。
 
 KV cache 量化幸运地只暴露在第一根轴上（cache 是跨步复用的存量，每 chunk 只压一次）；
 但任何**激活侧**方案——W4A4、Q 的量化、基于注意力输出的 proxy 指标——都必须处理第二根轴。
