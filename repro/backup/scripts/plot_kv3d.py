@@ -113,7 +113,7 @@ if __name__ == "__main__":
                   "Layer 24/48,", sys.argv[2])
     elif mode == "hy":
         K, V = load_hy()
-        plot_pair(K, V, "HY-WorldPlay (8B) — raw KV cache (K = [RoPE'd 128 | pre-RoPE 128] concat)",
+        plot_pair(K, V, "HY-WorldPlay (8B) — raw KV cache (K = [rotary branch 128 | PRoPE branch 128] concat)",
                   "Layer 13/30,", sys.argv[2])
     elif mode == "kvplot":
         arm, k_idx, v_idx, out = sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), sys.argv[5]
