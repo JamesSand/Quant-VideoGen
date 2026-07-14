@@ -3,7 +3,7 @@
 # Usage: recreate_pod.sh <tag> [bad_node_to_add]
 set -eu
 TAG=${1:?tag}
-REPRO=/home/zhizhousha/workspace/video-project/Quant-VideoGen/repro
+REPRO=/home/zhizhousha/workspace/video-project/Quant-VideoGen/repro/backup
 export KUBECONFIG=/home/zhizhousha/workspace/low-precision-project/k8s-from-h100-pod/kubeconfig/research-common-h100
 export PATH=/home/zhizhousha/workspace/low-precision-project/k8s-from-h100-pod/bin:$PATH
 
@@ -18,7 +18,7 @@ kubectl delete pod $PODNAME --ignore-not-found --wait=true
 python3 - "$TAG" <<'EOF'
 import sys, yaml, pathlib
 tag = sys.argv[1]
-repro = pathlib.Path('/home/zhizhousha/workspace/video-project/Quant-VideoGen/repro')
+repro = pathlib.Path('/home/zhizhousha/workspace/video-project/Quant-VideoGen/repro/backup')
 mf = yaml.safe_load((repro / 'pods' / f'{tag}.yaml').read_text())
 bad = [l.strip() for l in (repro / 'race' / 'bad_nodes.txt').read_text().splitlines() if l.strip()]
 spec = mf['spec']
