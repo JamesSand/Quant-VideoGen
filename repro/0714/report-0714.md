@@ -45,19 +45,19 @@
 
 **可配参数对照**（发布脚本实际值，`grep` 自 `scripts/*/run_qvg.sh`）：
 
-| 参数 | **QVG** | **QVG-Pro** | LingBot 中间档 | 出处 |
-|---|---|---|---|---|
-| `num_prq_stages`（S，k-means 轮数） | **1** | **4** | 2 | dataclass 默认=4（`sim/quant/quantize_config.py:24-26`）|
-| `quant_block_size`（B，channel 块大小） | **64** | **16** | 16 | dataclass 默认=16（`quantize_config.py:21`）|
-| `cache_num_k_centroids` / `_v_`（K） | 256 / 256 | 256 / 256 | 256 / 256 | 各 run_qvg.sh |
-| `kmeans_max_iters` | LongCat **100**（一次性压缩条件窗）；SF / HY **2**（流式 + 质心缓存，paper §4.3 的 3× 优化） | 100（我们 0713 var 实验的跑法；无官方发布脚本） | 4 | 各 run_qvg.sh |
-| `quant_type` | `triton-nstages-kmeans-int2`（int4 同名换后缀） | 同左 | 同左 | |
-| 逐 token 存储（残差+scale+索引；不含质心，= chunk→∞ 的渐近 BPE） | 2 + 8/64 + 1×8/128 = **2.1875** | 2 + 8/16 + 4×8/128 = **2.75** | 2.625 | §2 公式 |
-| 真实 BPE @ LC 发布 chunk（= 上行 + 质心表分摊：S×256质心×128维×16bit ÷ (29,640token×128维)） | **2.326 → 6.88×** | 3.30 → 4.85× | — | §2.2 |
-| 首帧 PSNR（0713 实测，INT2，mean±std n=3） | 28.88 ± 0.18 | **31.04 ± 0.005** | — | 0713 report |
+| 参数 | **QVG** | **QVG-Pro** | 出处 |
+|---|---|---|---|
+| `num_prq_stages`（S，k-means 轮数） | **1** | **4** | dataclass 默认=4（`sim/quant/quantize_config.py:24-26`）|
+| `quant_block_size`（B，channel 块大小） | **64** | **16** | dataclass 默认=16（`quantize_config.py:21`）|
+| `cache_num_k_centroids` / `_v_`（K） | 256 / 256 | 256 / 256 | 各 run_qvg.sh |
+| `kmeans_max_iters` | LongCat **100**（一次性压缩条件窗）；SF / HY **2**（流式 + 质心缓存，paper §4.3 的 3× 优化） | 100（我们 0713 var 实验的跑法；无官方发布脚本） | 各 run_qvg.sh |
+| `quant_type` | `triton-nstages-kmeans-int2`（int4 同名换后缀） | 同左 | |
+| 逐 token 存储（残差+scale+索引；不含质心，= chunk→∞ 的渐近 BPE） | 2 + 8/64 + 1×8/128 = **2.1875** | 2 + 8/16 + 4×8/128 = **2.75** | §2 公式 |
+| 真实 BPE @ LC 发布 chunk（= 上行 + 质心表分摊：S×256质心×128维×16bit ÷ (29,640token×128维)） | **2.326 → 6.88×** | 3.30 → 4.85× | §2.2 |
+| 首帧 PSNR（0713 实测，INT2，mean±std n=3） | 28.88 ± 0.18 | **31.04 ± 0.005** | 0713 report |
 
 三个值得注意的点：
-1. **repo 的 dataclass 默认值就是 QVG-Pro**（S=4/B=16），但所有发布视频脚本都显式覆盖成 QVG（S=1/B=64）——只有 LingBot 用了中间档（S=2/B=16/iters=4）。**QVG-Pro 没有任何官方发布脚本**，paper Table 1 的 QVG-Pro 行只能靠 argparse 默认或手工传参复现（0713 我们的做法）。
+1. **repo 的 dataclass 默认值就是 QVG-Pro**（S=4/B=16），但所有发布视频脚本都显式覆盖成 QVG（S=1/B=64）。**QVG-Pro 没有任何官方发布脚本**，paper Table 1 的 QVG-Pro 行只能靠 argparse 默认或手工传参复现（0713 我们的做法）。
 2. `kmeans_max_iters` 在官方脚本里差 50 倍（LongCat 100 vs SF/HY 2）：LongCat 对固定 73 帧条件窗一次性压缩可以奢侈迭代；流式模型靠上一 chunk 质心热启动 + 2 次迭代（paper §4.3 声称的 3× k-means 加速正是这条路径）。
 3. Pro 对 QVG 的交换：每元素多付 0.5625 bit 元数据 + 4 倍 k-means 成本（0713 实测 s/it 2.94 vs 2.69），买到 +2.16 dB 首帧 PSNR 和更稳的方差（σ 0.005 vs 0.18，四轮平均稀释了质心随机性）。
 
