@@ -4,7 +4,7 @@
 
 1. **量化代码在哪、是不是"逐 token Hadamard + B16 int2 scale"？** —— 代码全部定位（下有 6 阶段 file:line 地图）。假设**一半对一半错**：分块 scale 的结构完全说对了（逐 token 的连续 channel 分块、对称 absmax、FP8 E4M3 scale）——但发布版 QVG 是 **B=64**（B=16 是 QVG-Pro）；而 **Hadamard 完全不存在**，全 repo 零命中（唯一的 Hadamard 代码是我们自己移植的 QuaRot 基线）。旋转的位置上实际是 **S 轮 token 维 k-means 减质心**。
 2. **真实 BPE 是多少？** —— 精确公式 `BPE = r + 8/B + S·8/128 + S·256·16/N`，与 README 实测显存**逐字节对上**（67.318 MB/层 vs 日志 67.32）。QVG INT2 在发布配置（chunk=29,640 token）下 **BPE=2.326，压缩 6.88×**；paper Table 1 报 6.94×，隐含比发布配置大 ~17% 的 chunk。三元打包可免费再赚 16-22%。
-3. **paper 怎么报速度、H100 实测如何？** —— paper 只报端到端 overhead 百分比（+1.5~4.3%，k-means 计入、每 chunk 一次），全文**没有任何 kernel 级 benchmark**，唯一绝对数字是附录 C：SF 180 帧 H100 = 43s 端到端 / 0.74s 量化开销 / 1.7%。我们的历史 H100 日志给出一个 paper 没敢声称的结论：**LongCat 上 INT2 端到端比 bf16 快 21%**（paper 只说"慢不超过 2.1%"）。新的受控实测（SF 复现 Table 6 + LongCat 算子分解）已上 pod，结果回填 §3.4。
+3. **paper 是怎么测速度的？** —— 只测一种东西：**量化/反量化给端到端生成时间带来的开销**（QVG vs BF16 各跑一遍完整生成，H100 + CUDA 12.8），k-means 成本计入、每 chunk 压缩一次；全文**没有任何 kernel 级 benchmark**。唯一绝对秒数在附录 C：SF 180 帧 = 端到端 43s / QVG 额外成本 0.74s / 开销 1.7%。方法细节见 §3。
 
 ---
 
@@ -132,91 +132,40 @@
 
 ---
 
-## 3. 速度：paper 的口径 + H100 实测
+## 3. paper 说的测速方法
 
-### 3.1 paper 怎么报速度的
+paper 只测一种东西：**量化/反量化给端到端生成时间带来的开销**（相对 BF16 KV cache 基线）。没有 kernel 级 benchmark、没有吞吐表、没有逐步计时。三处口径（原文引文均出自 2602.02958v5）：
 
-**核心事实：paper 从未声称 QVG 更快——只声称"慢得不多"。** 全文无 kernel 级 benchmark、无 GB/s、无逐步计时，全部速度叙事是：
+### 3.1 主文 §5.3 — 端到端开销百分比
 
-| 位置 | 内容 |
-|---|---|
-| 摘要/结论 | "最高 7.0× 压缩，端到端延迟开销 <4%" |
-| §5.3 | 端到端开销：LongCat **+2.1%**、HY-World **+1.5%**、Self-Forcing **+4.3%**（只有百分比，无绝对秒数）|
-| §4.3 | streaming centroid caching（用上一 chunk 的分配初始化下一 chunk 的质心）把 k-means 开销降 **3×**；repo 印证：SF 脚本 `kmeans_max_iters=2`（流式），LongCat=100（一次性）|
-| 附录 B.1 Table 4 | chunk 大小扫描（SF INT2）：37,440 token → 开销 1.3% / 压缩 7.0×；18,720 → 2.0%/6.7×；9,360 → 3.3%/5.8× |
-| **附录 C Table 6** | **全文唯一绝对秒数**：SF 180 帧、batch 1，H100：端到端 **43 s**，QVG 额外成本 **0.74 s**，开销 **1.7%**（RTX 5090：72s/1.34s/1.9%）|
-| 附录 C Table 7 | batch 1/2/5 → 43/86/217 s，开销稳定 1.6-1.7% |
+> "We evaluate the **end-to-end latency** to quantify the **overhead introduced by quantization and dequantization** in our method."
 
-k-means 成本的记账方式：**计入所有报告的延迟**，每 chunk 压缩一次（SF 16 帧/chunk，HY 12，LongCat 压 73 帧条件窗）。
-**内部矛盾**：SF 的开销在 §5.3 是 4.3%、Table 6 是 1.7%、Table 4 是 1.3-3.3%，paper 未调和——复现时预期落在 1.3~4.3% 区间任意处都算"复现成功"。
+- 测法：BF16 和 QVG 各跑一遍**完整生成管线**，报生成总时间的增幅百分比。
+- 平台（§5.1）：NVIDIA H100，CUDA 12.8。
+- k-means 成本**计入**（不排除、不摊销掉）；压缩每 chunk 一次（SF 16 latent 帧/chunk、HY 12、LongCat 压 73 帧条件窗），流式模型用上一 chunk 质心热启动（§4.3，`kmeans_max_iters=2`）。
+- 报告值：LongCat **+2.1%**、HY-World **+1.5%**、Self-Forcing **+4.3%**。
 
-### 3.2 我们已有的 H100 证据（历史日志挖掘，无需新跑）
+### 3.2 附录 B.1 — 量化管线占比（按 chunk 扫描）
 
-这是本次调查最有分量的发现：**在发布实现里 INT2 不比 bf16 慢——LongCat 上反而显著更快**：
+> "We **profile the runtime overhead of the k-means clustering and quantization pipeline** of QVG under different chunk sizes on Self-Forcing with INT2 quantization."
 
-| 模型/对照 | bf16 | QVG INT2 | 结论 |
-|---|---:|---:|---|
-| LongCat 1493 帧极限对（70 段同工作量） | 3.441 s/it；端到端 4h34m | **2.530 s/it（快 26%）**；3h37m（**快 21%**，已含 16.4s/段的 kmeans 开销） | INT2 每步更快 |
-| LongCat 10 段对（0710） | 3.558 s/it | 2.562 s/it | 复现（另一节点对） |
-| LongCat full-KV 变体 | 5.19 s/it | 4.69 s/it | 复现（第三节点对，+10%） |
-| Self-Forcing 匹配位置耗时 | block 60: 217s | block 60: 215s | 打平（一次性 ~33s 编译后零代价） |
-| HY 几何匹配 12-chunk 对 | 稳态 chunk 55.7s | 稳态 chunk **42.1s（快 24%）** | INT2 更快 |
-| fake-quant 基线（QuaRot/RTN sim 路径） | 3.44 参考 | 3.44-3.63 s/it（不加速） | **加速来自真打包 cache，不是少算了什么** |
+- 测法：k-means+量化管线耗时 ÷ 端到端运行时间，SF INT2，扫 chunk 大小。
+- Table 4：chunk 37,440 / 18,720 / 9,360 token → **1.3% / 2.0% / 3.3%**。
 
-机制：attention 对 KV cache 是访存受限的，7× 更小的打包 cache 直接降内存流量（LongCat 22.3 GB vs 3.2 GB）。跨 run 节点噪声 <5%，26% 远超噪声且三对节点复现。
-**对照 paper**：paper 声称 LongCat "+2.1% 开销"（更慢），我们实测**快 21%**——比 paper 的声称更有利，方向相反。可能因软件栈差异（paper 未给 torch/FlashAttention 版本）导致其 bf16 基线更快。
+### 3.3 附录 C — 唯一的绝对秒数
 
-### 3.3 复现配方（本次执行的）
+> "a breakdown of the **end-to-end latency** and the **QVG-related overhead** on Self-Forcing for both an NVIDIA H100 and an NVIDIA RTX 5090"
 
-paper 可复现的速度目标只有两类：Table 6 的绝对数（SF 180 帧：43s / 0.74s / 1.7%）和 §5.3 的百分比。已上两个 H100 pod：
+- 测法：端到端秒数与 "QVG extra cost" 两个量分开报。
+- Table 6（SF，batch 1）：H100 **43 s / 0.74 s / 1.7%**；RTX 5090 72 s / 1.34 s / 1.9%。
+- Table 7（batch 扫描）：batch 1/2/5 → 43/86/217 s，开销稳定 1.6-1.7%。
 
-1. **`speed_sf`**：SF 180 帧发布配置（S=1/B=64/K=256/iters=2，与 Table 6 完全一致），同一 GPU 上 bf16/int2 各跑两遍——第一遍热身（Triton JIT/autotune），**第二遍计时**。产出：端到端墙钟、去噪循环 tqdm、"Quantization KV Cache Time" 总和 → 直接对 43s/0.74s/1.7%。
-2. **`speed_lc`**：LongCat 单段续写，`TIME_BENCH=5` 算子级分解（repo 自带 cuda-event 计时器，只挂在 LongCat 上），bf16 vs int2 各两遍 → 解释 §3.2 里 26% 加速的算子来源（注意：TIME_BENCH 每算子强制 synchronize，只用于分解不用于端到端计时）。
+### 3.4 按 paper 方法实际操作时的对应物与注意事项
 
-### 3.4 实测结果
-
-两个 pod 均完成（H100 80GB HBM3 @1980MHz；同一 GPU 上 bf16/int2 顺序执行，热身一遍后取第二遍计时）。
-
-#### SF：paper Table 6 正面复现（节点 h100-116）
-
-先解开一个 5 倍之谜：**发布脚本的 `num_output_frames=180` 实际生成 180 个 latent = 717 视频帧**（实测输出 `(717,480,832,3)`），是 paper Table 6 "180 frames"（=45 latent，15 block）工作量的 **4 倍**。按块数换算后 paper 的 43s 与我们的测量同一量级。
-
-| 量 | bf16 | QVG INT2 | paper Table 6（工作量 ×¼） |
-|---|---:|---:|---:|
-| 去噪循环（60 block） | 213 s（3.56 s/it） | **204 s（3.40 s/it，快 4.2%）** | 43 s 端到端（≈15 block，折算一致） |
-| 端到端墙钟（含加载/VAE） | 615 s | 599 s | — |
-| 量化总开销 | — | 18.46 s（14 次，均 1.32 s/次） | 0.74 s（见下方争议） |
-| 峰值显存 | 63.4 GB | **24.2 GB** | — |
-| KV cache 显存 | 49.36 GB | **9.90 GB（5.0×）** | — |
-
-- **overhead 结论：在 H100 + torch 2.8 上 SF 的 INT2 端到端是净加速（−4.2%），不是 paper 声称的 +1.7~4.3% 开销**——18.5s 量化成本被 attention 读路径的节省（49→10 GB 流量）反超。paper 的开销声称在我们的软件栈上是保守的。
-- **0.74s 之争**：我们按 repo 自己的 cuda-event 计时（`Quantization KV Cache Time`）测得每 chunk 1.32s（kmeans 2 迭代 + 打包），折算到 paper 工作量约 4-5s，仍比其声称的 0.74s 高 ~6×。paper 未说明其 0.74s 的测量口径（疑似只计打包 kernel、不含 kmeans 与 permute）；无法进一步对齐。
-
-#### LongCat：26% 加速的算子级来源（节点 h100-057，TIME_BENCH=5，56 步累计）
-
-| 算子 | bf16 | INT2 | Δ |
-|---|---:|---:|---:|
-| Model Forward 总计 | 216.1 s | **166.6 s** | **−23%** |
-| └ Self Attention（block 级） | 162.0 s | 111.8 s | **−50.3 s** |
-| &nbsp;&nbsp;├ Process Attention（SDPA 本体） | 66.0 s | 66.7 s | ≈0 |
-| &nbsp;&nbsp;├ Rope 3D | 27.6 s | 29.6 s | +2.0 s |
-| &nbsp;&nbsp;├ QKV/QKNorm/OutProj | 14.8 s | 14.2 s | ≈0 |
-| &nbsp;&nbsp;└ **未列账 = KV cache 读取/拼接/物化** | **~53.6 s** | **~1.2 s** | **−52 s** |
-| k-means（每段一次，循环外） | — | 12.7 s | |
-| 量化总计（每段一次） | — | 34.2 s | |
-| 去噪循环 tqdm | 198 s (3.55 s/it) | 148 s (2.66 s/it) | −25% |
-
-**机制定论**：SDPA 计算完全相同（66 vs 67s，读路径反量化回 bf16 后做同样的 attention）；26% 加速**全部来自 KV cache 的数据搬运**——bf16 路径每步要搬 22.3 GB 的 bf16 cache（56 步 ≈ 1.25 TB 流量，HBM 上 ~53s，与未列账时间吻合），INT2 路径搬 3.2 GB 打包 cache + 融合反量化，几乎免费。每段一次的 34.2s 量化成本摊在 56 步里仍净赚。**讽刺的是：被我们诊断为长度解锁瓶颈的"全量反量化读路径"（0713 结论），在速度维度上反而比直接读大 bf16 cache 更快。**
-
-> 复注：TIME_BENCH 每算子强制 synchronize，s/it 比无插桩跑略膨胀（bf16 3.55 vs 3.44；int2 2.66 vs 2.53），分解比例可信、绝对值以无插桩跑为准。
-
-### 3.5 速度复现结论（对 3 个目标逐一裁决）
-
-1. **paper 端到端开销声称（+1.5~4.3%）**：❌ 方向都不对——H100 实测三模型 INT2 全部**不慢于** bf16（LongCat −23%、HY 稳态 −24%、SF −4.2%）。paper 的声称过于保守，可能因其 bf16 基线用了更快的注意力实现。
-2. **Table 6 绝对值（43s）**：✅ 换算后一致——发布脚本工作量是 Table 6 的 4 倍（717 帧 vs 180 帧），按块折算同一量级。
-3. **Table 6 量化成本（0.74s）**：⚠️ 部分复现——我们测 1.32s/chunk，折算后比声称高 ~6×，paper 口径未说明，存疑。
-
----
+- paper **没写**的：计时器实现、warmup 次数、prompt 数量、"QVG extra cost" 的统计范围（是否含 k-means/permute）均未说明。
+- repo 里与 "QVG extra cost" 对应的现成计时点：三个模型的推理代码都打印 `Quantization KV Cache Time: X s`（`torch.cuda.Event` 计时；SF 在 `experiments/Self-Forcing/pipeline/causal_inference.py:79-132`）——对 int2 日志求和即得。端到端 = 完整生成的墙钟。
+- 具体命令：`bash scripts/Self-Forcing/run_bf16.sh` 与 `bash scripts/Self-Forcing/run_qvg.sh` 各计一次端到端墙钟，差值/基线 = §5.3 的 overhead%；量化成本从 qvg 日志求和。
+- ⚠️ 换算陷阱：SF 发布脚本 `num_output_frames=180` 实际生成 **180 latent = 717 视频帧**（实测确认），是 Table 6 "180 frames"（45 latent）的 4 倍工作量——对齐附录 C 的绝对秒数时必须按块数折算。
 
 ## 附：本节结论对既有文档的修正
 
