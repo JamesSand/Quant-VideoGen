@@ -33,10 +33,13 @@ def get(layer, win, t):
 ROWS = 500
 
 
+FIXED_HEAD = 4  # comparison figures use ONE fixed head everywhere (user rule)
+
+
 def surf(ax, x, title, marks=(), head=None):
-    """head=None -> auto-pick the head with the largest absmax (the hot spot)."""
+    """head=None -> FIXED_HEAD. Pass head explicitly only for single exhibits."""
     if head is None:
-        head = int(x.abs().amax(dim=(0, 2)).argmax())
+        head = FIXED_HEAD
     m = np.abs(x[:, head, :].numpy())
     S, D = m.shape
     stride = max(1, S // ROWS)
@@ -56,10 +59,9 @@ def surf(ax, x, title, marks=(), head=None):
 
 # ---------------- Fig A: video begin / mid / end (L15) ----------------
 fig = plt.figure(figsize=(15, 9))
-hk = hv = None
 for j, w in enumerate(WIN):
-    hk = surf(fig.add_subplot(2, 3, j + 1, projection="3d"), get(15, w, "k"), f"K — video {w} (L15)", head=hk)
-    hv = surf(fig.add_subplot(2, 3, 3 + j + 1, projection="3d"), get(15, w, "v"), f"V — video {w} (L15)", head=hv)
+    surf(fig.add_subplot(2, 3, j + 1, projection="3d"), get(15, w, "k"), f"K — video {w} (L15)")
+    surf(fig.add_subplot(2, 3, 3 + j + 1, projection="3d"), get(15, w, "v"), f"V — video {w} (L15)")
 fig.suptitle("SF KV values across the video — begin / mid / end (identical walls, no drift)", fontsize=12)
 fig.tight_layout(); fig.savefig(os.path.join(FIGS, "sf_kv_time.png"), dpi=140); plt.close(fig)
 
@@ -93,7 +95,7 @@ fig.tight_layout(); fig.savefig(os.path.join(FIGS, "sf_kv_chunk.png"), dpi=140);
 fig = plt.figure(figsize=(16, 12))
 for j, l in enumerate(LAYERS):
     surf(fig.add_subplot(3, 3, j + 1, projection="3d"), get(l, "mid", "k"), f"K — layer {l} (mid window)")
-    surf(fig.add_subplot(3, 3, 3 + j + 1, projection="3d"), get(l, "mid", "v"), f"V — layer {l} (mid window)")  # per-layer hottest head
+    surf(fig.add_subplot(3, 3, 3 + j + 1, projection="3d"), get(l, "mid", "v"), f"V — layer {l} (mid window)")
 axk = fig.add_subplot(3, 3, 7)
 axk.boxplot([get(l, "mid", "k").norm(dim=-1).flatten().numpy() for l in LAYERS],
             tick_labels=[f"L{l}" for l in LAYERS], flierprops=dict(marker=".", markersize=2))
@@ -114,4 +116,11 @@ axb.set_title("absmax by depth (quantization range driver)", fontsize=9)
 axb.legend(); axb.grid(alpha=0.3, axis="y")
 fig.suptitle("SF KV across depth — last layer is the quantization hot spot", fontsize=12)
 fig.tight_layout(); fig.savefig(os.path.join(FIGS, "sf_kv_depth.png"), dpi=140); plt.close(fig)
-print("saved 3 figures")
+# ---------------- Fig D: L29 outlier-head exhibit (H4 vs H9) ----------------
+fig = plt.figure(figsize=(11, 4.8))
+x = get(29, "mid", "k")
+surf(fig.add_subplot(1, 2, 1, projection="3d"), x, "K — L29, normal head", head=4)
+surf(fig.add_subplot(1, 2, 2, projection="3d"), x, "K — L29, OUTLIER head", head=9)
+fig.suptitle("SF L29 K: head 9 is a whole-head outlier (same layer, same window, same scale rules)", fontsize=11)
+fig.tight_layout(); fig.savefig(os.path.join(FIGS, "sf_kv_l29_h9.png"), dpi=140); plt.close(fig)
+print("saved 4 figures")
