@@ -45,3 +45,21 @@ one-hot → 梯度消失、loss 尖刺。QK-Norm 把两者钉在 ~‖g‖ 量级
 - 视频 DiT K 侧无 TNI 的更站得住的解释：**文本条件走 cross-attention，self-attention 的
   cache 里只有视频 patch token**——没有 BOS/标点这类可当 sink 的无信息 token，
   sink 的形成土壤不存在。
+
+## 附：L29 H9 的成因分解（实测，回答"是不是 g 大导致的"）
+
+从 checkpoint 提取 L29 `norm_k` 的 g（`generator_ema` → `model.blocks.29.self_attn.norm_k.weight`，
+reshape 12×128），与实测 K（sf_qkv.pt, mid 窗）对齐：
+
+| 量 | 结果 |
+|---|---|
+| g 每头 RMS | H9=1.69 vs 其他中位 1.41——仅 1.2×，**单独解释不了 7 倍 norm** |
+| g 每头最大通道 | **H9 的 ch95=5.4、ch49=4.6**（其他头最大只有 1.6-2.8） |
+| 实测 K@H9 通道 rms top | **ch95=89.9、ch49=44.6**——与 g 的大通道完全重合，corr(|g|,K)=0.83 |
+| 还原 x̂=K/g | ch95 上 x̂ rms=16.6（基线=1）：**单通道占走全 token ~18% 能量** |
+| 验算 | 16.6 × 5.4 ≈ 90 ≈ 实测 89.9 ✓ |
+
+**结论**：主因是 W_k 学出的投影把每个 token 的能量集中到 H9 的少数通道（16.6×），
+g 在同一批通道上的 3-5 倍增益是放大器，两者相乘造就整头 105。更精确的说法：
+"整头离群"实为**两根巨型通道（ch95/ch49）支配的头**——kv 值 3D 图里那面墙就是 ch95。
+whole-dim QK-Norm 对此无约束（只管 1536 维总账）；per-head 归一（Qwen3 式）会把它压平。
