@@ -1,7 +1,7 @@
 # Self-Forcing：KV 值 与 QKV norm 解剖
 
 > 对象：Self-Forcing（Wan 1.3B）
-> 指标：① K/V 的值（token×channel 热图） ② Q/K/V 的 norm 分布
+> 指标：① K/V 的值（token×channel 的 3D 曲面图） ② Q/K/V 的 norm 分布
 > 角度：视频前后 ／ chunk 内部 ／ layer 深浅
 > 数据：180 帧 bf16 生成中现场捕获——layer {0,15,29} × 时间窗 {帧0-5, 87-92, 174-179}，
 > K 为 pre-RoPE 原始值，Q 取每 block 最后去噪步（dump `results/kvplot/sf_qkv.pt`）
