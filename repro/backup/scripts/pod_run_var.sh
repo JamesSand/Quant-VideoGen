@@ -1,6 +1,6 @@
 #!/bin/bash
 # Variance study: rerun one INT2 method config. Usage: pod_run_var.sh <method> <runidx>
-# methods: qvgpro | qvg | quarot_asym16 | quarot_sym16 | quarot_asym128 | rtn16
+# methods: qvgpro | qvg | quarot_asym16 | quarot_sym16 | quarot_asym64 | quarot_sym64 | quarot_asym128 | rtn16
 set -u
 M=${1:?}; IDX=${2:?}
 TAG=var_${M}_run${IDX}
@@ -45,6 +45,14 @@ case $M in
     export QUAROT_BLOCK=128 QUAROT_SYM=0 QUAROT_ROTATE_K=1 QUAROT_ROTATE_V=1 QUAROT_TARGET=experiments/LongCat/run_long_t2v.py
     torchrun --nproc_per_node=1 --standalone repro/backup/scripts/quarot_launcher.py $COMMON \
       --quant_type naive-int2 --quant_block_size 128 ;;
+  quarot_asym64)
+    export QUAROT_BLOCK=64 QUAROT_SYM=0 QUAROT_ROTATE_K=1 QUAROT_ROTATE_V=1 QUAROT_TARGET=experiments/LongCat/run_long_t2v.py
+    torchrun --nproc_per_node=1 --standalone repro/backup/scripts/quarot_launcher.py $COMMON \
+      --quant_type naive-int2 --quant_block_size 64 ;;
+  quarot_sym64)
+    export QUAROT_BLOCK=64 QUAROT_SYM=1 QUAROT_ROTATE_K=1 QUAROT_ROTATE_V=1 QUAROT_TARGET=experiments/LongCat/run_long_t2v.py
+    torchrun --nproc_per_node=1 --standalone repro/backup/scripts/quarot_launcher.py $COMMON \
+      --quant_type naive-int2 --quant_block_size 64 ;;
   rtn16)
     torchrun --nproc_per_node=1 --standalone experiments/LongCat/run_long_t2v.py $COMMON \
       --quant_type naive-int2 --quant_block_size 16 ;;
