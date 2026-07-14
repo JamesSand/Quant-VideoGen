@@ -1,0 +1,7 @@
+START 2026-07-14_01:16:13 tag=speed_sf node=research-common-h100-116.cloud.together.ai
+NVIDIA H100 80GB HBM3, 1980 MHz
+PASS bf16_warm rc=0 wall=645s
+PASS bf16_meas rc=0 wall=615s
+PASS int2_warm rc=0 wall=638s
+PASS int2_meas rc=0 wall=599s
+OK
