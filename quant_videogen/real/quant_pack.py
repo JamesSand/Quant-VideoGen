@@ -13,9 +13,18 @@ def get_configs():
                     )
     return configs
 
+def _prune_small_block_d(configs, named_args, **kwargs):
+    # BLOCK_D < Q_BLOCK_SIZE makes SCALE_BLOCK_D = 0 (tl.arange(0, 0) is illegal);
+    # a tile must cover at least one full quantization block.
+    q = named_args.get('Q_BLOCK_SIZE', kwargs.get('Q_BLOCK_SIZE', 1))
+    pruned = [c for c in configs if c.kwargs.get('BLOCK_D', q) >= q]
+    return pruned or configs
+
+
 @triton.autotune(
     configs=get_configs(),
     key=["N", "D"],
+    prune_configs_by={'early_config_prune': _prune_small_block_d},
 )
 @triton.heuristics(
     values={
