@@ -94,6 +94,8 @@
 | QVG INT4 (S=1,B=64) | 4.597 → 3.48× | 4.326 → 3.70× | 4.216 → 3.80× | 4.1875 → 3.82× |
 | RTN INT2 (B=16) | 2.5 → 6.40× | 2.5 → 6.40× | 2.5 → 6.40× | 2.5 → 6.40×（与 N 无关） |
 
+> RTN 行注：repo 的 `naive-int2`（RTN 基线）**也是三元对称**——`int_max = 2^(n−1)−1 = 1`，`clamp(round(x/s), −1, +1)`，无 zero-point（`sim/quant/lowbit_quantize.py:675-678,764`）。所以 2.5 = 2 bit 码 + 8/16 scale，没有 zero-point 项是诚实的；RTN 无索引、无质心表，故整行与 N 无关。若换成非对称 4 级（{0..3}+FP8 zero-point，即我们 0713 的 30.38 dB 跑法），BPE = 2 + 0.5 + 0.5 = 3.0 → 5.33×：多付 0.5 bit 买 +8.5 dB。
+
 ### 2.3 与 paper 的对账
 
 - **Table 1 全部数字可被公式重现**：反解每个声称比值的隐含 chunk N，LongCat 四个数一致落在 ~35k token、HY 四个数一致落在 ~50k token——paper 的账目结构诚实（质心、索引、scale 全计入，Fig 7(a) 也明确分解了）。
