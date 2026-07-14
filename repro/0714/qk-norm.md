@@ -48,6 +48,9 @@ one-hot → 梯度消失、loss 尖刺。QK-Norm 把两者钉在 ~‖g‖ 量级
 
 ## 附：L29 H9 的成因分解（实测，回答"是不是 g 大导致的"）
 
+![g](figs/qk_norm_g_l29.png)
+
+
 从 checkpoint 提取 L29 `norm_k` 的 g（`generator_ema` → `model.blocks.29.self_attn.norm_k.weight`，
 reshape 12×128），与实测 K（sf_qkv.pt, mid 窗）对齐：
 
