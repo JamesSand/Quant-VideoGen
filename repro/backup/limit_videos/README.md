@@ -14,4 +14,4 @@ bf16 = 不量化 KV-cache；qvg-int2 = 论文主方法（triton-nstages-kmeans-i
 
 关键工程发现：INT2 的实际长度解锁是 **~3×**，不是存储压缩比的 7×——发布实现的注意力读取路径把整段历史反量化回 bf16 并全量重应用 RoPE，该瞬态仍按全长 bf16 计价，成为新瓶颈（SF 720-latent 与 HY 60-chunk 的 OOM 都发生在这条路径上）。
 
-原始输出与日志：`results/limits/`、`repro/logs/limit_*.log`、`repro/race/result_limit_*.txt`。
+原始输出与日志：`results/limits/`、`repro/backup/logs/limit_*.log`、`repro/backup/race/result_limit_*.txt`。

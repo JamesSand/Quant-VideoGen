@@ -8,7 +8,7 @@ export QUAROT_BLOCK=$BLOCK QUAROT_SYM=$SYM QUAROT_ROTATE_K=$ROT QUAROT_ROTATE_V=
 export QUAROT_TARGET=experiments/LongCat/run_long_t2v.py
 export PYTHONPATH=experiments/LongCat
 
-torchrun --nproc_per_node=1 --standalone repro/quarot_launcher.py --checkpoint_dir=ckpts/LongCat-Video \
+torchrun --nproc_per_node=1 --standalone repro/backup/scripts/quarot_launcher.py --checkpoint_dir=ckpts/LongCat-Video \
     --workload 480p_long_gen \
     --init_video_path results/longcat/base/1-0.mp4 \
     --output_dir results/quarot/${TAG} \

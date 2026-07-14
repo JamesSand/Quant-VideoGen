@@ -14,7 +14,7 @@ export QUAROT_TARGET=experiments/HY-WorldPlay/wan/generate.py
 export PYTHONPATH=experiments/HY-WorldPlay:experiments/HY-WorldPlay/wan
 export LIBRARY_PATH=/usr/local/cuda/targets/x86_64-linux/lib/stubs${LIBRARY_PATH:+:$LIBRARY_PATH}
 
-torchrun --nproc_per_node=1 --standalone repro/quarot_launcher.py \
+torchrun --nproc_per_node=1 --standalone repro/backup/scripts/quarot_launcher.py \
   --input "$PROMPT" \
   --image_path assets/hyworld.png \
   --num_chunk 12 \

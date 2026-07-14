@@ -9,7 +9,7 @@ import compress_kv_cache` binds the patched function.
 
 Usage:
   QUAROT_TARGET=experiments/LongCat/run_long_t2v.py \
-  torchrun ... repro/quarot_launcher.py <target-script-args with --quant_type naive-int2>
+  torchrun ... repro/backup/scripts/quarot_launcher.py <target-script-args with --quant_type naive-int2>
 
 Config env vars: see repro/quarot_quant.py. Set QUAROT_DISABLE=1 to run the
 target with the stock naive RTN path (no patch) for A/B.

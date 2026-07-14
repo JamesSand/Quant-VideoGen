@@ -11,7 +11,7 @@ Also isolates k-means RNG (same as longcat_rngiso_launcher) so all sweep
 points share identical noise trajectories and are directly comparable.
 
 Usage:
-  CLIP_PCT=95 torchrun ... repro/clip_launcher.py <run_long_t2v args with
+  CLIP_PCT=95 torchrun ... repro/backup/scripts/clip_launcher.py <run_long_t2v args with
   --quant_type triton-nstages-kmeans-int2/int4>
 """
 

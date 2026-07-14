@@ -1,6 +1,6 @@
 """Precompute per-frame PSNR/SSIM/LPIPS arrays for every method-vs-bf16 pair.
 
-Output: repro/protosearch/<name>.npz with keys psnr, ssim, lpips (float64,
+Output: repro/backup/protosearch/<name>.npz with keys psnr, ssim, lpips (float64,
 one value per frame index, full video length, frame 0 included).
 """
 
@@ -15,7 +15,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-OUT = "repro/protosearch"
+OUT = "repro/backup/protosearch"
 os.makedirs(OUT, exist_ok=True)
 dev = "cuda"
 lp = lpips_mod.LPIPS(net="vgg").to(dev)

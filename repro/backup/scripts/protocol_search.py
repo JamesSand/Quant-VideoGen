@@ -18,7 +18,7 @@ import json
 
 import numpy as np
 
-D = "repro/protosearch"
+D = "repro/backup/protosearch"
 
 BLOCKS = {
     "LC_INT2": {

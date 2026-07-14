@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Video Compare</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0b0d12;
+      color: #f4f6fb;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: #0b0d12; }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 20px;
+      border-bottom: 1px solid #242936;
+      background: #11141b;
+    }
+    h1 { margin: 0; font-size: 18px; }
+    .status { color: #9aa4b5; font-size: 13px; }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 20px;
+      border-bottom: 1px solid #242936;
+      background: #11141b;
+    }
+    button, select {
+      height: 36px;
+      border: 1px solid #343b4b;
+      border-radius: 8px;
+      background: #1a1f2a;
+      color: #f4f6fb;
+      padding: 0 12px;
+    }
+    button { cursor: pointer; }
+    button:hover { background: #252c3a; }
+    label {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: #c9d0dc;
+      font-size: 13px;
+    }
+    .timeline {
+      display: grid;
+      grid-template-columns: auto minmax(180px, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      flex: 1 1 360px;
+      min-width: 280px;
+    }
+    input[type="range"] { width: 100%; }
+    main {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      padding: 12px;
+      min-height: calc(100vh - 126px);
+    }
+    .panel {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      border: 1px solid #242936;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #11141b;
+    }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      border-bottom: 1px solid #242936;
+    }
+    .panel-head strong { width: 48px; }
+    .panel-head select { min-width: 0; flex: 1; }
+    .panel-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .panel-actions button {
+      padding: 0 10px;
+      white-space: nowrap;
+    }
+    .video-wrap {
+      display: grid;
+      place-items: center;
+      flex: 1;
+      min-height: 320px;
+      background: #050608;
+    }
+    video {
+      display: block;
+      width: 100%;
+      height: 100%;
+      max-height: calc(100vh - 190px);
+      object-fit: contain;
+      background: #050608;
+    }
+    .meta {
+      padding: 8px 10px;
+      color: #9aa4b5;
+      font-size: 12px;
+      border-top: 1px solid #242936;
+    }
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+      video { max-height: 55vh; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>双视频对比</h1>
+    <div id="status" class="status">正在读取视频列表…</div>
+  </header>
+
+  <section class="controls">
+    <button id="playBoth">同时播放</button>
+    <button id="pauseBoth">同时暂停</button>
+    <button id="align">重新对齐</button>
+    <label><input id="sync" type="checkbox"> 同时播放时保持同步</label>
+    <label>速度
+      <select id="rate">
+        <option value="0.25">0.25×</option>
+        <option value="0.5">0.5×</option>
+        <option value="0.75">0.75×</option>
+        <option value="1" selected>1×</option>
+        <option value="1.5">1.5×</option>
+        <option value="2">2×</option>
+      </select>
+    </label>
+    <label><input id="muted" type="checkbox" checked> 静音</label>
+    <div class="timeline">
+      <span id="current">00:00.0</span>
+      <input id="timeline" type="range" min="0" max="1000" value="0">
+      <span id="duration">00:00.0</span>
+    </div>
+  </section>
+
+  <main>
+    <section class="panel">
+      <div class="panel-head">
+        <strong>左侧</strong>
+        <select id="leftSelect"></select>
+        <div class="panel-actions">
+          <button id="playLeft">播放</button>
+          <button id="pauseLeft">暂停</button>
+        </div>
+      </div>
+      <div class="video-wrap">
+        <video id="leftVideo" controls playsinline preload="none"></video>
+      </div>
+      <div id="leftMeta" class="meta">未选择</div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <strong>右侧</strong>
+        <select id="rightSelect"></select>
+        <div class="panel-actions">
+          <button id="playRight">播放</button>
+          <button id="pauseRight">暂停</button>
+        </div>
+      </div>
+      <div class="video-wrap">
+        <video id="rightVideo" controls playsinline preload="none"></video>
+      </div>
+      <div id="rightMeta" class="meta">未选择</div>
+    </section>
+  </main>
+
+  <script>
+    const left = document.querySelector("#leftVideo");
+    const right = document.querySelector("#rightVideo");
+    const leftSelect = document.querySelector("#leftSelect");
+    const rightSelect = document.querySelector("#rightSelect");
+    const timeline = document.querySelector("#timeline");
+    const sync = document.querySelector("#sync");
+    const rate = document.querySelector("#rate");
+    const muted = document.querySelector("#muted");
+    const status = document.querySelector("#status");
+    let changing = false;
+    let dragging = false;
+
+    const formatTime = (seconds) => {
+      if (!Number.isFinite(seconds)) return "00:00.0";
+      const minutes = Math.floor(seconds / 60);
+      const remain = seconds - minutes * 60;
+      return `${String(minutes).padStart(2, "0")}:${remain.toFixed(1).padStart(4, "0")}`;
+    };
+
+    const safeDuration = () => Math.min(
+      Number.isFinite(left.duration) ? left.duration : Infinity,
+      Number.isFinite(right.duration) ? right.duration : Infinity
+    );
+
+    function setVideo(video, meta, name) {
+      video.src = encodeURI(name);
+      video.load();
+      meta.textContent = name;
+    }
+
+    function fillSelect(select, files) {
+      select.innerHTML = "";
+      files.forEach((file) => {
+        const option = document.createElement("option");
+        option.value = file;
+        option.textContent = file;
+        select.appendChild(option);
+      });
+    }
+
+    async function loadFiles() {
+      const html = await fetch("./").then((response) => response.text());
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const files = [...doc.querySelectorAll("a")]
+        .map((anchor) => decodeURIComponent(anchor.getAttribute("href") || ""))
+        .filter((name) => /\.(mp4|webm|mov|m4v)$/i.test(name))
+        .sort((a, b) => a.localeCompare(b));
+
+      if (!files.length) throw new Error("当前目录没有找到视频");
+      fillSelect(leftSelect, files);
+      fillSelect(rightSelect, files);
+      rightSelect.selectedIndex = Math.min(1, files.length - 1);
+      setVideo(left, document.querySelector("#leftMeta"), leftSelect.value);
+      setVideo(right, document.querySelector("#rightMeta"), rightSelect.value);
+      status.textContent = `已找到 ${files.length} 个视频`;
+    }
+
+    function alignTo(source = left, force = false) {
+      if ((!sync.checked && !force) || changing) return;
+      const target = source === left ? right : left;
+      if (!Number.isFinite(source.currentTime)) return;
+      changing = true;
+      target.currentTime = Math.min(source.currentTime, target.duration || source.currentTime);
+      changing = false;
+    }
+
+    async function playBoth() {
+      alignTo(left, true);
+      await Promise.allSettled([left.play(), right.play()]);
+    }
+
+    function pauseBoth() {
+      left.pause();
+      right.pause();
+    }
+
+    document.querySelector("#playBoth").addEventListener("click", playBoth);
+    document.querySelector("#pauseBoth").addEventListener("click", pauseBoth);
+    document.querySelector("#align").addEventListener("click", () => alignTo(left, true));
+    document.querySelector("#playLeft").addEventListener("click", () =>
+      left.play().catch(() => {}));
+    document.querySelector("#pauseLeft").addEventListener("click", () => left.pause());
+    document.querySelector("#playRight").addEventListener("click", () =>
+      right.play().catch(() => {}));
+    document.querySelector("#pauseRight").addEventListener("click", () => right.pause());
+
+    leftSelect.addEventListener("change", () =>
+      setVideo(left, document.querySelector("#leftMeta"), leftSelect.value));
+    rightSelect.addEventListener("change", () =>
+      setVideo(right, document.querySelector("#rightMeta"), rightSelect.value));
+
+    rate.addEventListener("change", () => {
+      left.playbackRate = Number(rate.value);
+      right.playbackRate = Number(rate.value);
+    });
+    muted.addEventListener("change", () => {
+      left.muted = muted.checked;
+      right.muted = muted.checked;
+    });
+    left.muted = right.muted = true;
+
+    [left, right].forEach((video) => {
+      video.addEventListener("loadedmetadata", () => {
+        const duration = safeDuration();
+        document.querySelector("#duration").textContent = formatTime(duration);
+      });
+    });
+
+    timeline.addEventListener("pointerdown", () => { dragging = true; });
+    timeline.addEventListener("pointerup", () => { dragging = false; });
+    timeline.addEventListener("input", () => {
+      const duration = safeDuration();
+      if (!Number.isFinite(duration)) return;
+      const next = duration * Number(timeline.value) / 1000;
+      left.currentTime = next;
+      right.currentTime = next;
+    });
+
+    function tick() {
+      if (sync.checked && !left.paused && !right.paused) {
+        const drift = right.currentTime - left.currentTime;
+        if (Math.abs(drift) > 0.12) right.currentTime = left.currentTime;
+      }
+      const duration = safeDuration();
+      if (!dragging && Number.isFinite(duration) && duration > 0) {
+        timeline.value = String(Math.round(left.currentTime / duration * 1000));
+      }
+      document.querySelector("#current").textContent = formatTime(left.currentTime);
+      requestAnimationFrame(tick);
+    }
+
+    loadFiles().catch((error) => {
+      status.textContent = error.message;
+      status.style.color = "#ff8a8a";
+    });
+    tick();
+  </script>
+</body>
+</html>

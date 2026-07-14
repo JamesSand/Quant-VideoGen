@@ -1,7 +1,7 @@
 # 0713 Handoff — QuaRot+Clip 扫描 / 方差研究 / Clip 张量刨析
 
 > 日报正文：[report-0713.md](report-0713.md)（总表、扫描数据、可视化全在里面）
-> 上游背景：[../REPORT.md](../REPORT.md)（复现总报告）、[../CLIP_STUDY.md](../CLIP_STUDY.md)、[../ROPE_DISPERSION.md](../ROPE_DISPERSION.md)
+> 上游背景：[../backup/REPORT.md](../backup/REPORT.md)（复现总报告）、[../backup/CLIP_STUDY.md](../backup/CLIP_STUDY.md)、[../backup/ROPE_DISPERSION.md](../backup/ROPE_DISPERSION.md)
 
 ## 今日完成（按时间序）
 
@@ -32,7 +32,7 @@ QVG-Pro **31.04±0.005** ｜ QuaRot+clip(r0.99) 30.68 ｜ QuaRot 非对称 B16 3
 2. **稀疏离群旁路**：clip 研究的正向续集——top 0.1~1% 离群提取 + 稀疏存储（~0.06B/值），目标"同压缩率打败 QVG"。
 3. **trit 打包免费压缩**（今日 #7 的推论）：三元残差按 3⁵/字节打包，6.89×→~7.5×，纯工程零质量代价。
 4. 多 prompt 稳健性验证（所有主结论 ×3 prompt，纯算力）。
-5. 给作者的 issue（`../ISSUE_DRAFT.md` 需按对称 QuaRot 指纹、方差发现更新后发出，等用户点头）。
+5. 给作者的 issue（`../backup/ISSUE_DRAFT.md` 需按对称 QuaRot 指纹、方差发现更新后发出，等用户点头）。
 
 ## 基础设施状态
 

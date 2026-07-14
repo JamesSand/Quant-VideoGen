@@ -8,10 +8,10 @@ CFG=${1:?config}
 
 cd /home/zhizhousha/workspace/video-project/Quant-VideoGen
 . .venv/bin/activate
-. repro/env_fix.sh
-export TRITON_CACHE_DIR=$PWD/repro/triton_cache/limit_$CFG
-mkdir -p $TRITON_CACHE_DIR repro/race repro/logs results/limits
-RESULT=repro/race/result_limit_$CFG.txt
+. repro/backup/scripts/env_fix.sh
+export TRITON_CACHE_DIR=$PWD/repro/backup/triton_cache/limit_$CFG
+mkdir -p $TRITON_CACHE_DIR repro/backup/race repro/backup/logs results/limits
+RESULT=repro/backup/race/result_limit_$CFG.txt
 echo "START $(date +%F_%T) cfg=$CFG node=${NODE_NAME:-?}" > $RESULT
 
 FREE_MB=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -1)
@@ -26,7 +26,7 @@ run_lc() {  # $1 = quant args or "--quant_type none", $2 = tag
     --workload 480p_long_gen --init_video_path results/longcat/base/1-0.mp4 \
     --output_dir results/limits/$2 --num_segments 70 --num_cond_frames 73 --seed 0 \
     --prompt_source text_to_video_from_file --prompt assets/t2v.txt --prompt_idx 1 \
-    $1 > repro/logs/limit_$2.log 2>&1
+    $1 > repro/backup/logs/limit_$2.log 2>&1
 }
 
 run_sf() {  # $1 = latents, $2 = quant args, $3 = tag
@@ -35,9 +35,9 @@ run_sf() {  # $1 = latents, $2 = quant args, $3 = tag
     experiments/Self-Forcing/inference.py \
     --config_path experiments/Self-Forcing/configs/self_forcing_dmd.yaml \
     --checkpoint_path ckpts/Self-Forcing/self_forcing_dmd.pt \
-    --data_path repro/prompt0.txt --output_folder results/limits/$3 \
+    --data_path repro/backup/scripts/prompt0.txt --output_folder results/limits/$3 \
     --num_samples 1 --num_output_frames $1 --local_attn_size $1 \
-    --use_ema --save_with_index $2 > repro/logs/limit_$3.log 2>&1
+    --use_ema --save_with_index $2 > repro/backup/logs/limit_$3.log 2>&1
 }
 
 run_hy() {  # $1 = num_chunk, $2 = memory_frames, $3 = pose, $4 = quant args, $5 = tag
@@ -52,7 +52,7 @@ run_hy() {  # $1 = num_chunk, $2 = memory_frames, $3 = pose, $4 = quant args, $5
     --ckpt_path ckpts/HY-WorldPlay/wan_distilled_model/model.pt \
     --offload_text_encoder --out results/limits/$5 \
     --memory_frames $2 --temporal_context_size $(($2-4)) --pred_latent_size 4 \
-    $4 > repro/logs/limit_$5.log 2>&1
+    $4 > repro/backup/logs/limit_$5.log 2>&1
 }
 
 pose_cycle() {  # $1 = number of 8-latent entries
@@ -61,7 +61,7 @@ pose_cycle() {  # $1 = number of 8-latent entries
   echo "${out%,}"
 }
 
-oom_in_log() { grep -q "OutOfMemoryError" "repro/logs/limit_$1.log" 2>/dev/null; }
+oom_in_log() { grep -q "OutOfMemoryError" "repro/backup/logs/limit_$1.log" 2>/dev/null; }
 
 case $CFG in
   lc_bf16)
@@ -102,7 +102,7 @@ case $CFG in
 esac
 
 if [ "${RC:-1}" -ne 0 ] || [ ! -f "$OUT" ]; then
-  echo "FAILED rc=${RC:-?} out_missing=$([ -f "$OUT" ] && echo no || echo yes) err=$(grep -m1 -oE 'OutOfMemoryError|RuntimeError[^\"]{0,80}|ValueError[^\"]{0,80}' repro/logs/limit_$CFG.log | head -1)" >> $RESULT
+  echo "FAILED rc=${RC:-?} out_missing=$([ -f "$OUT" ] && echo no || echo yes) err=$(grep -m1 -oE 'OutOfMemoryError|RuntimeError[^\"]{0,80}|ValueError[^\"]{0,80}' repro/backup/logs/limit_$CFG.log | head -1)" >> $RESULT
   exit 1
 fi
 NFRAMES=$(python - "$OUT" <<'PY'
@@ -110,5 +110,5 @@ import sys, imageio
 print(sum(1 for _ in imageio.get_reader(sys.argv[1])))
 PY
 )
-PEAK=$(grep -oE "Peak Memory Usage: [0-9.]+" repro/logs/limit_$CFG.log | tail -1)
+PEAK=$(grep -oE "Peak Memory Usage: [0-9.]+" repro/backup/logs/limit_$CFG.log | tail -1)
 echo "OK frames=$NFRAMES ${PEAK:-peak=n/a}" >> $RESULT

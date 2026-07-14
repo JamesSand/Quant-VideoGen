@@ -1,1 +1,4 @@
 triton_cache/
+logs/
+backup/limit_videos/*.mp4
+backup/first_frames_rawclip/

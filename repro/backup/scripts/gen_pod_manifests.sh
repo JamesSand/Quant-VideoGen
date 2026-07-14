@@ -1,7 +1,7 @@
 #!/bin/bash
-# Generate one 1-GPU pod manifest per baseline config into repro/pods/.
+# Generate one 1-GPU pod manifest per baseline config into repro/backup/pods/.
 set -eu
-OUTDIR=/home/zhizhousha/workspace/video-project/Quant-VideoGen/repro/pods
+OUTDIR=/home/zhizhousha/workspace/video-project/Quant-VideoGen/repro/backup/pods
 mkdir -p $OUTDIR
 
 CONFIGS=(
@@ -39,7 +39,7 @@ spec:
   containers:
     - name: main
       image: nvcr.io/nvidia/pytorch:25.11-py3
-      command: ["bash", "-lc", "bash /home/zhizhousha/workspace/video-project/Quant-VideoGen/repro/pod_run_one.sh $KIND $BITS $BLOCK $SYM $ROT $TAG"]
+      command: ["bash", "-lc", "bash /home/zhizhousha/workspace/video-project/Quant-VideoGen/repro/backup/scripts/pod_run_one.sh $KIND $BITS $BLOCK $SYM $ROT $TAG"]
       workingDir: /home/zhizhousha
       env:
         - name: HOME

@@ -1,7 +1,7 @@
 #!/bin/bash
 # repro wrapper: LongCat QVG with k-means RNG isolated from the default RNG
-# stream (see repro/longcat_rngiso_launcher.py). Usage:
-#   bash repro/run_longcat_qvg_rngiso.sh int2   # or int4
+# stream (see repro/backup/scripts/longcat_rngiso_launcher.py). Usage:
+#   bash repro/backup/scripts/run_longcat_qvg_rngiso.sh int2   # or int4
 set -e
 BITS=${1:?usage: run_longcat_qvg_rngiso.sh int2|int4}
 
@@ -25,7 +25,7 @@ init_video_path=results/longcat/base/${prompt_idx}-${seed}.mp4
 
 export PYTHONPATH=experiments/LongCat
 
-torchrun --nproc_per_node=1 --standalone repro/longcat_rngiso_launcher.py --checkpoint_dir=ckpts/LongCat-Video \
+torchrun --nproc_per_node=1 --standalone repro/backup/scripts/longcat_rngiso_launcher.py --checkpoint_dir=ckpts/LongCat-Video \
     --workload 480p_long_gen \
     --init_video_path ${init_video_path} \
     --output_dir ${output_path} \
