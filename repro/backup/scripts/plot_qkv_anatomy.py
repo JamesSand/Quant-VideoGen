@@ -42,18 +42,42 @@ def tok_norm_med(x):   # [S,H,D] -> [S]
     return x.norm(dim=-1).median(dim=1).values.numpy()
 
 
-# ---------------- Fig 1: time windows ----------------
 L = 15
-fig = plt.figure(figsize=(14, 4.6))
-for j, t in enumerate(("q", "k", "v")):
-    ax = fig.add_subplot(1, 3, j + 1)
-    data = [norms(get(L, w)[t]) for w in WIN]
-    ax.boxplot(data, tick_labels=list(WIN), widths=0.5,
-               flierprops=dict(marker=".", markersize=2))
-    ax.set_title(f"{t.upper()} token-norm by video position (L{L})", fontsize=10)
-    ax.set_ylabel("L2 norm (tokens x heads)"); ax.grid(alpha=0.3, axis="y")
-fig.suptitle("SF QKV norms — video begin / mid / end (last denoise step)", fontsize=13)
-fig.tight_layout(); fig.savefig(os.path.join(FIGS, "qkv_time.png"), dpi=140); plt.close(fig)
+
+
+# ---- per-token norm panel: x = token index (full window), y = token norm.
+#      one thin line per head + bold median line across heads.
+def fig3_panel(ax, x, title):
+    nrm = x.norm(dim=-1).numpy()          # [S, H]
+    S, H = nrm.shape
+    xs = np.arange(S)
+    for h in range(H):
+        ax.plot(xs, nrm[:, h], lw=0.25, color="steelblue", alpha=0.25)
+    ax.plot(xs, np.median(nrm, axis=1), lw=0.9, color="navy", label="median over heads")
+    ax.set_title(title, fontsize=9)
+    ax.set_xlabel("Token index", fontsize=8); ax.set_ylabel("Token L2 norm", fontsize=8)
+    ax.grid(alpha=0.3)
+
+
+def grid9(cols, coldata, fname, suptitle):
+    """rows = Q/K/V, cols = 3 conditions; row-shared ylim for comparability."""
+    fig = plt.figure(figsize=(15, 10))
+    for i, tname in enumerate(("q", "k", "v")):
+        xs = [coldata(c)[tname] for c in cols]
+        lo = min(float(x.norm(dim=-1).min()) for x in xs)
+        hi = max(float(x.norm(dim=-1).max()) for x in xs)
+        pad = 0.05 * (hi - lo)
+        for j, (c, x) in enumerate(zip(cols, xs)):
+            ax = fig.add_subplot(3, 3, i * 3 + j + 1)
+            fig3_panel(ax, x, f"{tname.upper()} — {c}")
+            ax.set_ylim(lo - pad, hi + pad)
+    fig.suptitle(suptitle, fontsize=13)
+    fig.tight_layout(); fig.savefig(os.path.join(FIGS, fname), dpi=140); plt.close(fig)
+
+
+# ---------------- Fig 1: time windows (rows Q/K/V x cols begin/mid/end, L15) ----------------
+grid9(list(WIN), lambda w: get(15, w), "qkv_time.png",
+      "SF QKV per-token-position norms (OScaR Fig.3 style) — video begin / mid / end (L15)")
 
 # ---------------- Fig 2: intra-block / intra-frame ----------------
 fig, axes = plt.subplots(1, 2, figsize=(14, 4.6))
@@ -79,17 +103,9 @@ for ax in axes:
 fig.suptitle("SF QKV — intra-chunk structure", fontsize=13)
 fig.tight_layout(); fig.savefig(os.path.join(FIGS, "qkv_chunk.png"), dpi=140); plt.close(fig)
 
-# ---------------- Fig 3: depth ----------------
-fig = plt.figure(figsize=(14, 4.6))
-for j, t in enumerate(("q", "k", "v")):
-    ax = fig.add_subplot(1, 3, j + 1)
-    data = [norms(get(l, "mid")[t]) for l in LAYERS]
-    ax.boxplot(data, tick_labels=[f"L{l}" for l in LAYERS], widths=0.5,
-               flierprops=dict(marker=".", markersize=2))
-    ax.set_title(f"{t.upper()} token-norm by depth (mid window)", fontsize=10)
-    ax.set_ylabel("L2 norm"); ax.grid(alpha=0.3, axis="y")
-fig.suptitle("SF QKV norms — early vs mid vs last layer", fontsize=13)
-fig.tight_layout(); fig.savefig(os.path.join(FIGS, "qkv_depth.png"), dpi=140); plt.close(fig)
+# ---------------- Fig 3: depth (rows Q/K/V x cols L0/L15/L29, mid window) ----------------
+grid9(LAYERS, lambda l: get(l, "mid"), "qkv_depth.png",
+      "SF QKV per-token-position norms (OScaR Fig.3 style) — layer 0 / 15 / 29 (mid window)")
 
 # ---------------- stats for the md ----------------
 print("layer,window,tensor,med_norm,toknorm_ratio,absmax")
