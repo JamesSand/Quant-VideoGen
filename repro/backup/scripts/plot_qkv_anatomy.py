@@ -45,18 +45,24 @@ def tok_norm_med(x):   # [S,H,D] -> [S]
 L = 15
 
 
-# ---- per-token norm panel: x = token index (full window), y = token norm.
-#      one thin line per head + bold median line across heads.
-def fig3_panel(ax, x, title):
+# ---- OScaR Fig.3(a)(b) panel: one BOX per token position; the box at position t
+#      is the distribution of that token's per-head norms (paper eq.5).
+def fig3_panel(ax, x, title, npos=16):
+    S = x.shape[0]
+    pos = np.linspace(0, S - 1, npos).astype(int)
     nrm = x.norm(dim=-1).numpy()          # [S, H]
-    S, H = nrm.shape
-    xs = np.arange(S)
-    for h in range(H):
-        ax.plot(xs, nrm[:, h], lw=0.25, color="steelblue", alpha=0.25)
-    ax.plot(xs, np.median(nrm, axis=1), lw=0.9, color="navy", label="median over heads")
+    bp = ax.boxplot([nrm[q_] for q_ in pos], positions=range(npos), widths=0.55,
+                    patch_artist=True, flierprops=dict(marker=".", markersize=3))
+    for b in bp["boxes"]:
+        b.set_facecolor("#9ecae1"); b.set_edgecolor("#3182bd"); b.set_alpha(0.9)
+    for med in bp["medians"]:
+        med.set_color("#08519c")
+    ax.set_xticks(range(npos))
+    ax.set_xticklabels([str(q_) for q_ in pos], rotation=60, fontsize=6)
     ax.set_title(title, fontsize=9)
-    ax.set_xlabel("Token index", fontsize=8); ax.set_ylabel("Token L2 norm", fontsize=8)
-    ax.grid(alpha=0.3)
+    ax.set_xlabel("Token Position", fontsize=8)
+    ax.set_ylabel("L2 Norm Distribution", fontsize=8)
+    ax.grid(alpha=0.3, axis="y")
 
 
 def grid9(cols, coldata, fname, suptitle):
