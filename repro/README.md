@@ -18,7 +18,7 @@ repro/
     ├── scripts/              全部脚本：launcher / pod runner / manifest 生成 / 环境修复
     ├── pods/                 历史 pod manifest（内嵌路径为迁移前旧路径，复用前需重新生成）
     ├── race/                 每条 run 的 result_*.txt 记录 + bad_nodes.txt
-    ├── metrics/ figs/ protosearch/ ropestudy/   数据与图表
+    ├── metrics/ figs/ protosearch/   数据与图表
     ├── logs/ triton_cache/   运行日志与 JIT 缓存（不入库）
     ├── first_frames_rawclip/ 原始 KV clip 研究的首帧图（本地，不入库）
     └── limit_videos/         生成长度极限实测视频（mp4 本地，不入库；README 入库）
