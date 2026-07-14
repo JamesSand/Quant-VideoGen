@@ -1,7 +1,7 @@
 # 0713 Handoff — QuaRot+Clip 扫描 / 方差研究 / Clip 张量刨析
 
 > 日报正文：[report-0713.md](report-0713.md)（总表、扫描数据、可视化全在里面）
-> 上游背景：[../backup/REPORT.md](../backup/REPORT.md)（复现总报告）、[../backup/CLIP_STUDY.md](../backup/CLIP_STUDY.md)、[../backup/ROPE_DISPERSION.md](../backup/ROPE_DISPERSION.md)
+> 上游背景：[../backup/REPORT.md](../backup/REPORT.md)（复现总报告）、[../backup/CLIP_STUDY.md](../backup/CLIP_STUDY.md)、[../0714/rope-dispersion.md](../0714/rope-dispersion.md)
 
 ## 今日完成（按时间序）
 

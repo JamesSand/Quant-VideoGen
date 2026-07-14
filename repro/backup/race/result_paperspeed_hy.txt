@@ -1,0 +1,6 @@
+START 2026-07-14_06:10:30 tag=paperspeed_hy node=research-common-h100-046.cloud.together.ai
+NVIDIA H100 80GB HBM3
+PASS bf16 rc=0 wall=635s
+PASS qvg_pass1 rc=0 wall=301s
+PASS qvg_pass2 rc=0 wall=200s
+OK

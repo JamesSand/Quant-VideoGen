@@ -105,7 +105,7 @@
 | | QuaRot 非对称 B128 | 30.72 | — | | |
 | | RTN B16 | **35.23** | 32.984 | 3.55× | INT4 最高 |
 
-读数：① INT2 下**标准非对称 QuaRot 是被 paper 低估的强基线**（30.38 vs paper 声称的 21.57），"QVG 显著优于 QuaRot"仅在对称 QuaRot 移植下成立；② INT4 下全部方法挤在 33-35 dB 窄带内，排序被 QVG 的运行间波动淹没，确定性方法中 RTN B16 最高；③ QVG 无争议的优势档位是 QVG-Pro（但压缩率最低）。相关研究：[CLIP_STUDY.md](CLIP_STUDY.md)（离群值裁剪）、[ROPE_DISPERSION.md](ROPE_DISPERSION.md)（旋转为何伤害视频 KV）。
+读数：① INT2 下**标准非对称 QuaRot 是被 paper 低估的强基线**（30.38 vs paper 声称的 21.57），"QVG 显著优于 QuaRot"仅在对称 QuaRot 移植下成立；② INT4 下全部方法挤在 33-35 dB 窄带内，排序被 QVG 的运行间波动淹没，确定性方法中 RTN B16 最高；③ QVG 无争议的优势档位是 QVG-Pro（但压缩率最低）。相关研究：[CLIP_STUDY.md](CLIP_STUDY.md)（离群值裁剪）、[rope-dispersion.md](../0714/rope-dispersion.md)（旋转为何伤害视频 KV）。
 
 ### PSNR 随生成推进的衰减（折线图）
 
