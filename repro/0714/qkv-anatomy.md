@@ -1,58 +1,92 @@
-# Self-Forcing：KV 值 + QKV norm，三个分析角度
+# Self-Forcing：KV 值 与 QKV norm 解剖
 
-- **对象**：Self-Forcing（Wan 1.3B），180 帧 bf16 生成中现场捕获
-- **指标**：① K/V 的**值**（token×channel 热图）② Q/K/V 的 **norm** 分布
-- **角度**：视频前后 ／ chunk 内部 ／ layer 深浅
-- 采集：layer {0,15,29} × 时间窗 {帧0-5, 87-92, 174-179}，K 为 pre-RoPE 原始值，Q 取每
-  block 最后去噪步；dump `results/kvplot/sf_qkv.pt`；绘图 `plot_sf_kv_summary.py`（值）+
-  `plot_qkv_anatomy.py`（norm）
+> 对象：Self-Forcing（Wan 1.3B）
+> 指标：① K/V 的值（token×channel 热图） ② Q/K/V 的 norm 分布
+> 角度：视频前后 ／ chunk 内部 ／ layer 深浅
+> 数据：180 帧 bf16 生成中现场捕获——layer {0,15,29} × 时间窗 {帧0-5, 87-92, 174-179}，
+> K 为 pre-RoPE 原始值，Q 取每 block 最后去噪步（dump `results/kvplot/sf_qkv.pt`）
+
+## 0. TL;DR 总表
+
+| 角度 | KV 值的发现 | QKV norm 的发现 |
+|---|---|---|
+| 视频前后 | K 的通道墙位置/强度全程不变；V 全程均匀噪声 | 三窗箱形重合，中位变化 <5%，无漂移 |
+| chunk 内部 | 通道墙笔直贯穿帧边界，块内均质 | 无 sink token；仅帧起点 K 抬升 ≤10%，V 噪声 ±20% 无规律 |
+| layer 深浅 | K 随深度恶化：absmax 9.4→13.1→**93.5（7×）**；V 三层不变 | **L29 的 K 有 norm≈105 的脱离簇**（主体 15），Q 同层拖尾至 78；V 深度不敏感 |
 
 ---
 
-## 角度一：视频前后（开头 / 中段 / 结尾，L15）
+## 1. 角度一：视频前后（开头 / 中段 / 结尾）
 
-**【KV 值】** 三个时间窗的 K 热图几乎是同一张图——通道墙位置/强度全程不变；V 同样无变化：
+### 1.1 KV 值
 
 ![kv time](figs/sf_kv_time.png)
 
-**【QKV norm】** 三窗箱形几乎重合（Q 14.7→15.4、K 14.4→14.9、V ≈11.8，变化 <5%）：
+读数：三个时间窗的 K 热图几乎是同一张图——通道墙的位置和强度全程不变（absmax
+11.9/13.1/12.6）；V 三窗同样都是均匀噪声（absmax 8.6/7.5/8.1）。
+
+### 1.2 QKV norm
 
 ![qkv norm time](figs/qkv_time.png)
 
-**结论**：KV 分布不随视频进度漂移。一套量化参数/质心全程适用；"视频越长越难压"不成立。
+读数：Q/K/V 三者的箱形在三窗几乎重合——Q 中位 14.7→15.3→15.4、K 14.4→14.7→14.9、
+V ≈11.8 全程不动；离群尾的形态也一致。
 
-## 角度二：chunk 内部（一个 3-latent 生成 block）
+### 1.3 小结
 
-**【KV 值】** 单 block 的 K 热图：通道墙笔直贯穿两条帧边界（黑虚线），块内均质；
-左图 K/V norm 逐位置曲线：仅帧起点后 ≤10% 抬升：
+**KV 分布不随视频进度漂移。**一套量化参数/一套质心全程适用；"视频越长尾部越难压"不成立；
+流式质心热启动（paper §4.3）能工作的分布学基础就在这里。
+
+## 2. 角度二：chunk 内部
+
+### 2.1 KV 值
 
 ![kv chunk](figs/sf_kv_chunk.png)
 
-**【QKV norm】** Q/K/V 三线的块内与帧内逐位置曲线（相对中位数）——Q 最平，K 帧起点小峰，
-V 噪声 ±20% 无位置规律：
+读数：右图单个 3-latent block 的 K 热图——**通道墙笔直穿过两条帧边界**（黑虚线），
+块内完全均质；左图 K/V norm 逐位置曲线：K 仅在每个 latent 帧起点后有 ≤10% 的抬升随即回落。
+
+### 2.2 QKV norm
 
 ![qkv norm chunk](figs/qkv_chunk.png)
 
-**结论**：chunk 内部没有 sink 式特殊 token，不需要按位置区别对待。
+读数：Q 最平（帧界几乎无反应）；K 帧起点小峰（≤10%）；V 逐点噪声 ±20% 但与位置无关。
+帧内空间扫描（右图）：帧顶部若干行 K 略高 ~8%，随行数衰减。
 
-## 角度三：layer 深浅（L0 / L15 / L29，中段窗）
+### 2.3 小结
 
-**【KV 值】** K 随深度恶化：L0 大片灰底几根细墙 → L15 墙变宽密 → **L29 墙又密又猛**；
-V 三层始终均匀噪声。底排：K norm 箱线（L29 悬空一簇 ≈105）、V norm（深度不敏感）、
-absmax 柱状（K: 9.4→13.1→**93.5**）：
+**chunk 内部没有 sink 式特殊 token，不需要按位置区别对待。**OScaR 在 LLM 里看到的
+"固定位置的异常 token"在 SF 的 chunk 结构里不存在。
+
+## 3. 角度三：layer 深浅（L0 / L15 / L29）
+
+### 3.1 KV 值
 
 ![kv depth](figs/sf_kv_depth.png)
 
-**【QKV norm】** Q/K/V 分层箱线——Q 和 K 在 L29 都长出大离群（Q 拖尾至 ~78，K 脱离簇
-103-107 vs 主体 15），V 三层无差：
+读数：K 随深度单调恶化——L0 大片灰底只有几根细墙（最易压）、L15 墙变宽变密、
+**L29 墙又密又猛且 absmax 爆到 93.5（中间层的 7 倍）**；V 三层始终均匀噪声
+（absmax 10.5/7.5/10.1）。底排 absmax 柱状图一眼可见 L29 的 K 独高。
+
+### 3.2 QKV norm
 
 ![qkv norm depth](figs/qkv_depth.png)
 
-**结论**：量化难度集中在**末层的 K（和 Q）**；V 对深度完全不敏感。
+读数：**L29 的 K 出现一撮脱离主体的高 norm 簇**——norm≈103-107，主体中位 14.9，
+**7 倍分离**且是紧凑的簇（悬空一团）而非连续尾巴；Q 同层拖尾至 ~78；L0/L15 两层干净。
+V 三层箱形几乎相同。
+
+### 3.3 小结
+
+**量化难度集中在末层的 K（和 Q），V 对深度完全不敏感。**这是 LLM attention-sink 的
+"高 norm 镜像版"：LLM 是低 norm sink token，SF 末层是高 norm token 簇——方向相反、
+对共享 scale 的危害同构。
 
 ---
 
-## 统计总表（median norm ｜ token-norm 极值比 ｜ absmax）
+## 4. 统计总表
+
+（每格：median norm ｜ token-norm 极值比 ｜ absmax）
 
 | Layer | 窗 | Q | K | V |
 |---|---|---|---|---|
@@ -66,15 +100,21 @@ absmax 柱状（K: 9.4→13.1→**93.5**）：
 | L29 | mid | 16.8 ｜ 1.39× ｜ **64.5** | 14.9 ｜ 1.22× ｜ **93.5** | 12.8 ｜ 2.39× ｜ 10.1 |
 | L29 | end | 16.3 ｜ 1.33× ｜ **62.0** | 14.8 ｜ 1.18× ｜ **93.5** | 15.0 ｜ 2.21× ｜ 10.0 |
 
-## 三条可动手的推论
+## 5. 结论与可动手的推论
 
-1. **按深度重分配量化预算**：末层 K 的 absmax 是中间层 7 倍（93.5 vs 13.1），同样块结构下
-   scale 被撑大 7 倍——末层用细块/高位宽/离群旁路、浅层更狠，是免费的质量空间。
-2. QVG 的 token 维 k-means 恰好能把 L29 的高 norm 簇吸进专属质心（簇状离群是 k-means
-   舒适区）——per-token 轴无离群保护也能工作的隐性原因。
-3. per-channel 路线（KIVI/OScaR）搬到视频模型，风险点在末层：高 norm token 簇会撑爆跨
-   token 共享的 scale——OScaR 的 Omni-Token Scaling 在末层有真实用武之地（中间层无 TNI，
-   见 [kv-distributions.md](kv-distributions.md)）。
+1. **按深度重分配量化预算**：末层 K 的 absmax 是中间层 7 倍，同样块结构下 scale 被撑大
+   7 倍——末层 K 用细块/高位宽/离群旁路、浅层更狠，是免费的质量空间（现成可跑的新实验）。
+2. **对 QVG 设计的解释**：token 维 k-means 恰好能把 L29 的高 norm 簇吸进专属质心
+   （簇状离群是 k-means 的舒适区）——QVG 在 per-token 轴上无任何离群保护也能工作的
+   隐性原因之一。
+3. **对 per-channel 路线的警示**：KIVI/OScaR 搬到视频模型，风险点在末层——高 norm token
+   簇会撑爆跨 token 共享的 scale；OScaR 的 Omni-Token Scaling 在末层有真实用武之地
+   （中间层无 TNI，见 [kv-distributions.md](kv-distributions.md)）。
 
-局限：单模型（SF）、单 prompt、每窗 2 block、Q 只取最后去噪步；LC/HY 同款整理待采
-（采集器已通用化，各一条 pod）。
+## 6. 方法与局限
+
+采集：`qkv_capture_launcher.py` 钩在 `attn_kv_cache_prerope`（q/k/v 原始入参，K 未加
+RoPE），同一 block 每个去噪步覆盖写，留存最后一步。绘图：`plot_sf_kv_summary.py`（KV 值）、
+`plot_qkv_anatomy.py`（QKV norm）。
+局限：单模型（SF）、单 prompt（滑板手）、每窗 2 个 block、Q 只取最后去噪步；LC/HY 的
+同款解剖与跨去噪步的 Q 演化留作后续（采集器已通用化，各一条 pod 即可）。
