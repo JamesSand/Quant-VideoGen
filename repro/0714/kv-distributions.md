@@ -77,7 +77,7 @@ K/V 各一列。脚本 `repro/backup/scripts/plot_token_norms.py`。
 
 ### 读数：视频 DiT 的 TNI 图景与 LLM 相反
 
-1. **K 侧没有 TNI**。三模型的 K token norm 都非常平（LC 近乎完美的 1.03×，疑似 QK-Norm
+1. **K 侧没有 TNI**（中间层口径；末层例外——SF L29 存在高 norm 离群簇，见 [qkv-anatomy.md](qkv-anatomy.md) §3）。三模型的 K token norm 都非常平（LC 近乎完美的 1.03×，疑似 QK-Norm
    把 K 的 norm 钉住了；SF/HY 也只有 1.3-1.4×），箱线图上**不存在 OScaR 在 LLM 里看到的
    低 norm attention-sink 离群 token**——video cache 里没有 BOS/文本类特殊 token。
    推论：OScaR 的病灶（per-channel K 量化被 TNI 放大误差）**在视频模型上基本不存在**，
