@@ -44,22 +44,15 @@ def tok_norm_med(x):   # [S,H,D] -> [S]
 
 # ---------------- Fig 1: time windows ----------------
 L = 15
-fig = plt.figure(figsize=(15, 9))
+fig = plt.figure(figsize=(14, 4.6))
 for j, t in enumerate(("q", "k", "v")):
-    ax = fig.add_subplot(2, 3, j + 1)
+    ax = fig.add_subplot(1, 3, j + 1)
     data = [norms(get(L, w)[t]) for w in WIN]
     ax.boxplot(data, tick_labels=list(WIN), widths=0.5,
                flierprops=dict(marker=".", markersize=2))
     ax.set_title(f"{t.upper()} token-norm by video position (L{L})", fontsize=10)
     ax.set_ylabel("L2 norm (tokens x heads)"); ax.grid(alpha=0.3, axis="y")
-for j, (w, tn) in enumerate([("begin", "k"), ("end", "k"), ("begin", "v"), ("end", "v")]):
-    ax = fig.add_subplot(2, 4, 5 + j)
-    m = get(L, w)[tn][:, 6, :].numpy()
-    v = np.percentile(np.abs(m), 99)
-    ax.imshow(m[::12], aspect="auto", cmap="coolwarm", vmin=-v, vmax=v)
-    ax.set_title(f"{tn.upper()} values, {w} (L{L} H6)", fontsize=9)
-    ax.set_xlabel("Channel"); ax.set_ylabel("Token")
-fig.suptitle("SF QKV — video begin / mid / end (last denoise step)", fontsize=13)
+fig.suptitle("SF QKV norms — video begin / mid / end (last denoise step)", fontsize=13)
 fig.tight_layout(); fig.savefig(os.path.join(FIGS, "qkv_time.png"), dpi=140); plt.close(fig)
 
 # ---------------- Fig 2: intra-block / intra-frame ----------------
@@ -87,25 +80,15 @@ fig.suptitle("SF QKV — intra-chunk structure", fontsize=13)
 fig.tight_layout(); fig.savefig(os.path.join(FIGS, "qkv_chunk.png"), dpi=140); plt.close(fig)
 
 # ---------------- Fig 3: depth ----------------
-fig = plt.figure(figsize=(15, 9))
+fig = plt.figure(figsize=(14, 4.6))
 for j, t in enumerate(("q", "k", "v")):
-    ax = fig.add_subplot(2, 3, j + 1)
+    ax = fig.add_subplot(1, 3, j + 1)
     data = [norms(get(l, "mid")[t]) for l in LAYERS]
     ax.boxplot(data, tick_labels=[f"L{l}" for l in LAYERS], widths=0.5,
                flierprops=dict(marker=".", markersize=2))
     ax.set_title(f"{t.upper()} token-norm by depth (mid window)", fontsize=10)
     ax.set_ylabel("L2 norm"); ax.grid(alpha=0.3, axis="y")
-for j, (l, tn) in enumerate([(0, "k"), (15, "k"), (29, "k")]):
-    ax = fig.add_subplot(2, 6, 7 + j)
-    m = get(l, "mid")[tn][:, 6, :].numpy(); v = np.percentile(np.abs(m), 99)
-    ax.imshow(m[::12], aspect="auto", cmap="coolwarm", vmin=-v, vmax=v)
-    ax.set_title(f"K values L{l}", fontsize=9); ax.set_xlabel("Channel")
-for j, (l, tn) in enumerate([(0, "v"), (15, "v"), (29, "v")]):
-    ax = fig.add_subplot(2, 6, 10 + j)
-    m = get(l, "mid")[tn][:, 6, :].numpy(); v = np.percentile(np.abs(m), 99)
-    ax.imshow(m[::12], aspect="auto", cmap="coolwarm", vmin=-v, vmax=v)
-    ax.set_title(f"V values L{l}", fontsize=9); ax.set_xlabel("Channel")
-fig.suptitle("SF QKV — early vs mid vs last layer", fontsize=13)
+fig.suptitle("SF QKV norms — early vs mid vs last layer", fontsize=13)
 fig.tight_layout(); fig.savefig(os.path.join(FIGS, "qkv_depth.png"), dpi=140); plt.close(fig)
 
 # ---------------- stats for the md ----------------
