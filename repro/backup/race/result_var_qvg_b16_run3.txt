@@ -1,0 +1,2 @@
+START 2026-07-14_06:14:52 tag=var_qvg_b16_run3 node=research-common-h100-110.cloud.together.ai
+OK
