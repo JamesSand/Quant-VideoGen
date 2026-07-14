@@ -79,11 +79,29 @@ def load_kvplot(arm, k_idx, v_idx):
     return K, V
 
 
+def load_hy(k_idx=26, v_idx=27):
+    # HY writes are BHSD, launcher cat'd 11 uniform writes along dim1 (=heads):
+    # [1, 11*24, 3520, 256] -> [1,11,24,3520,256] -> [S=11*3520, H=24, D=256]
+    d = torch.load("results/kvplot/hy_kv.pt", weights_only=False, mmap=True)
+    def rebuild(idx):
+        x = d["selected"][idx]
+        n_writes = d["meta"][idx]["writes"]
+        B, HW, S, D = x.shape
+        H = HW // n_writes
+        x = x.view(B, n_writes, H, S, D).permute(0, 1, 3, 2, 4).reshape(n_writes * S, H, D)
+        return x.float().cpu()[:TOK_CAP]
+    return rebuild(k_idx), rebuild(v_idx)
+
+
 if __name__ == "__main__":
     mode = sys.argv[1]
     if mode == "sf":
         K, V = load_sf()
         plot_pair(K, V, "Self-Forcing (Wan 1.3B) — raw KV cache", "Layer 15/30,", sys.argv[2])
+    elif mode == "hy":
+        K, V = load_hy()
+        plot_pair(K, V, "HY-WorldPlay (8B) — raw KV cache (K = [RoPE'd 128 | pre-RoPE 128] concat)",
+                  "Layer 13/30,", sys.argv[2])
     elif mode == "kvplot":
         arm, k_idx, v_idx, out = sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), sys.argv[5]
         title = sys.argv[6] if len(sys.argv) > 6 else arm
