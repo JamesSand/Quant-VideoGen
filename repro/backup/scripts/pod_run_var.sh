@@ -33,6 +33,16 @@ case $M in
       --quant_type triton-nstages-kmeans-int2 --quant_block_size 64 \
       --cache_num_k_centroids 256 --cache_num_v_centroids 256 \
       --kmeans_max_iters 100 --num_prq_stages 1 ;;
+  qvg_b16)
+    torchrun --nproc_per_node=1 --standalone experiments/LongCat/run_long_t2v.py $COMMON \
+      --quant_type triton-nstages-kmeans-int2 --quant_block_size 16 \
+      --cache_num_k_centroids 256 --cache_num_v_centroids 256 \
+      --kmeans_max_iters 100 --num_prq_stages 1 ;;
+  qvg_b128)
+    torchrun --nproc_per_node=1 --standalone experiments/LongCat/run_long_t2v.py $COMMON \
+      --quant_type triton-nstages-kmeans-int2 --quant_block_size 128 \
+      --cache_num_k_centroids 256 --cache_num_v_centroids 256 \
+      --kmeans_max_iters 100 --num_prq_stages 1 ;;
   quarot_asym16)
     export QUAROT_BLOCK=16 QUAROT_SYM=0 QUAROT_ROTATE_K=1 QUAROT_ROTATE_V=1 QUAROT_TARGET=experiments/LongCat/run_long_t2v.py
     torchrun --nproc_per_node=1 --standalone repro/backup/scripts/quarot_launcher.py $COMMON \
