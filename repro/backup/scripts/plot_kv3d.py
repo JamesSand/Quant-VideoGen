@@ -93,11 +93,24 @@ def load_hy(k_idx=26, v_idx=27):
     return rebuild(k_idx), rebuild(v_idx)
 
 
+def load_lc(call_idx=24):
+    # compress-hook capture: BHSD [1, 32, 12000, 128] -> [S, H, D]
+    d = torch.load("results/kvplot/lc_kv.pt", weights_only=False, mmap=True)
+    sel = d["selected"][call_idx]
+    K = sel["k"][0].permute(1, 0, 2).float().cpu()[:TOK_CAP]
+    V = sel["v"][0].permute(1, 0, 2).float().cpu()[:TOK_CAP]
+    return K, V
+
+
 if __name__ == "__main__":
     mode = sys.argv[1]
     if mode == "sf":
         K, V = load_sf()
         plot_pair(K, V, "Self-Forcing (Wan 1.3B) — raw KV cache", "Layer 15/30,", sys.argv[2])
+    elif mode == "lc":
+        K, V = load_lc()
+        plot_pair(K, V, "LongCat-Video (13.6B) — raw KV cache (73-frame cond window chunk)",
+                  "Layer 24/48,", sys.argv[2])
     elif mode == "hy":
         K, V = load_hy()
         plot_pair(K, V, "HY-WorldPlay (8B) — raw KV cache (K = [RoPE'd 128 | pre-RoPE 128] concat)",
