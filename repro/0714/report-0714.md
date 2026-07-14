@@ -28,7 +28,40 @@
 | 5 | 反量化 | `quant_videogen/real/accumulate.py:60-255` | 单个融合 kernel：拆位 → 乘 FP8 scale → 按 uint8 id 逐 stage 收集质心累加 → 输出 BF16 |
 | 6 | 注意力读路径 | `quant_videogen/kv_cache.py:151-218` | **没有融合量化注意力**：每次读量化 span 都全量重建 BF16 再做普通 attention。压缩省的是显存，不省 attention FLOPs |
 
-### 1.3 考古中的意外发现
+### 1.3 QVG 与 QVG-Pro 参数全表
+
+**两者共享的机制**（写死在代码里，不可配）：
+
+| 机制 | 实现 | 代码位置 |
+|---|---|---|
+| Pipeline | S 轮 token 维 k-means 减质心 → 残差逐 token 连续 channel 分块量化 | `real/prq.py:52-93` |
+| 残差网格 | 对称 absmax；INT2 → **三元 {−1,0,+1}**（max_int=2^(b−1)−1=1）；INT4 → {−7..+7} 15 级 | `real/quant_pack.py:70,81` |
+| scale | **FP8 E4M3**，每 (token, head, B 个连续 channel) 一个；先舍入到 FP8 再用作除数 | `quant_pack.py:75-79`，默认值 `functions.py:267` |
+| 残差打包 | 4 值/uint8（INT2）、2 值/uint8（INT4），真位打包 | `quant_pack.py:91-108`，`PACK_OUTPUT_INT8=True` 写死于 `functions.py:324` |
+| 聚类索引 | uint8，每 (token, head, stage) 一个（要求 K≤256） | `prq.py:74-76`，`CLUSTER_ID_INT8=True` 写死于 `functions.py:325` |
+| 质心表 | bf16 (B,H,K,128)，每层、K/V 各自、每 stage 一份，**每 chunk 重学** | `prq.py:63-72` |
+| K 的缓存时机 | RoPE 之前（pre-RoPE），读取时重施 RoPE | `kv_cache.py` 读路径 |
+| 没有的东西 | 无 zero-point（对称）、无 Hadamard/旋转、无 clipping（`-clip` 变体存在但未启用） | §1.2/§1.4 |
+
+**可配参数对照**（发布脚本实际值，`grep` 自 `scripts/*/run_qvg.sh`）：
+
+| 参数 | **QVG** | **QVG-Pro** | LingBot 中间档 | 出处 |
+|---|---|---|---|---|
+| `num_prq_stages`（S，k-means 轮数） | **1** | **4** | 2 | dataclass 默认=4（`sim/quant/quantize_config.py:24-26`）|
+| `quant_block_size`（B，channel 块大小） | **64** | **16** | 16 | dataclass 默认=16（`quantize_config.py:21`）|
+| `cache_num_k_centroids` / `_v_`（K） | 256 / 256 | 256 / 256 | 256 / 256 | 各 run_qvg.sh |
+| `kmeans_max_iters` | LongCat **100**（一次性压缩条件窗）；SF / HY **2**（流式 + 质心缓存，paper §4.3 的 3× 优化） | 100（我们 0713 var 实验的跑法；无官方发布脚本） | 4 | 各 run_qvg.sh |
+| `quant_type` | `triton-nstages-kmeans-int2`（int4 同名换后缀） | 同左 | 同左 | |
+| 元数据代价（bit/元素，残差+scale+索引） | 2 + 8/64 + 1×8/128 = **2.1875** | 2 + 8/16 + 4×8/128 = **2.75** | 2.625 | §2 公式 |
+| BPE @ LC 发布 chunk（29,640 token，含质心） | **2.326 → 6.88×** | ~3.30 → 4.85× | — | §2.2 |
+| 首帧 PSNR（0713 实测，INT2，mean±std n=3） | 28.88 ± 0.18 | **31.04 ± 0.005** | — | 0713 report |
+
+三个值得注意的点：
+1. **repo 的 dataclass 默认值就是 QVG-Pro**（S=4/B=16），但所有发布视频脚本都显式覆盖成 QVG（S=1/B=64）——只有 LingBot 用了中间档（S=2/B=16/iters=4）。**QVG-Pro 没有任何官方发布脚本**，paper Table 1 的 QVG-Pro 行只能靠 argparse 默认或手工传参复现（0713 我们的做法）。
+2. `kmeans_max_iters` 在官方脚本里差 50 倍（LongCat 100 vs SF/HY 2）：LongCat 对固定 73 帧条件窗一次性压缩可以奢侈迭代；流式模型靠上一 chunk 质心热启动 + 2 次迭代（paper §4.3 声称的 3× k-means 加速正是这条路径）。
+3. Pro 对 QVG 的交换：每元素多付 0.5625 bit 元数据 + 4 倍 k-means 成本（0713 实测 s/it 2.94 vs 2.69），买到 +2.16 dB 首帧 PSNR 和更稳的方差（σ 0.005 vs 0.18，四轮平均稀释了质心随机性）。
+
+### 1.4 考古中的意外发现
 
 - **"INT2"= 三元**：对称 absmax 使 4 个码位只用 3 个（0b11 永不出现）——确认了我们 0713 的推断，现在有 file:line 铁证（`quant_pack.py:70,81`）。
 - **`-clip` 变体在代码里存在但从未被使用**：`functions.py:301-314` 有 99 分位离群提取（为把 scale 压进 E4M3 范围，TARGET_MAX=448×max_int），但所有发布 `run_qvg.sh` 都不带 `-clip` 后缀。也就是说 **paper 的 pipeline 里没有任何 clipping**——0713 我们做的 QuaRot+clip 探索在原方法中无对应物。
