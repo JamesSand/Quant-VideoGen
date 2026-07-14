@@ -1,7 +1,9 @@
-"""SF KV summary, one clean figure per dimension (K row / V row each):
-  sf_kv_time.png  — K,V value heatmaps at video begin/mid/end (L15), median norm in titles
-  sf_kv_chunk.png — K,V relative token-norm within a 3-latent block + K heatmap of one block
-  sf_kv_depth.png — K,V value heatmaps at L0/L15/L29 + norm boxplots + absmax bars
+"""SF KV summary, one clean figure per dimension (K row / V row each).
+Convention (user, 0714): ALL KV value plots are 3D surfaces (X=channel, Y=token,
+Z=|value|, coolwarm) — same style as plot_kv3d.py / OScaR Fig.2.
+  sf_kv_time.png  — K,V value surfaces at video begin/mid/end (L15)
+  sf_kv_chunk.png — K,V token-norm curves within a block + K surface of one block
+  sf_kv_depth.png — K,V value surfaces at L0/L15/L29 + norm boxplots + absmax bars
 """
 import os
 
@@ -28,21 +30,36 @@ def get(layer, win, t):
     return torch.cat([slots[(layer, f)][t] for f in frames], dim=1)[0].float()  # [S,H,D]
 
 
-def heat(ax, x, title):
-    m = x[:, HEAD, :].numpy()
-    v = np.percentile(np.abs(m), 99.5)
-    ax.imshow(m[::12], aspect="auto", cmap="coolwarm", vmin=-v, vmax=v)
-    med = float(x.norm(dim=-1).median())
-    mx = float(x.abs().max())
-    ax.set_title(f"{title}\nmed norm {med:.1f} | absmax {mx:.1f}", fontsize=9)
-    ax.set_xlabel("Channel"); ax.set_ylabel("Token")
+ROWS = 500
+
+
+def surf(ax, x, title, marks=(), head=None):
+    """head=None -> auto-pick the head with the largest absmax (the hot spot)."""
+    if head is None:
+        head = int(x.abs().amax(dim=(0, 2)).argmax())
+    m = np.abs(x[:, head, :].numpy())
+    S, D = m.shape
+    stride = max(1, S // ROWS)
+    z = m[::stride]
+    Y, X = np.mgrid[0:z.shape[0], 0:D]
+    ax.plot_surface(X, Y * stride, z, cmap="coolwarm", rstride=2, cstride=2,
+                    linewidth=0, antialiased=False)
+    for tk in marks:  # frame boundaries drawn on the floor
+        ax.plot([0, D - 1], [tk, tk], [0, 0], color="black", lw=1.5)
+    med = float(x[:, head].norm(dim=-1).median())
+    mx = float(x[:, head].abs().max())
+    ax.set_title(f"{title} [H{head}]\nmed norm {med:.1f} | absmax {mx:.1f} (this head)", fontsize=9)
+    ax.set_xlabel("Channel", labelpad=6); ax.set_ylabel("Token", labelpad=8)
+    ax.view_init(elev=32, azim=-58)
+    return head
 
 
 # ---------------- Fig A: video begin / mid / end (L15) ----------------
-fig, axes = plt.subplots(2, 3, figsize=(13, 7.5))
+fig = plt.figure(figsize=(15, 9))
+hk = hv = None
 for j, w in enumerate(WIN):
-    heat(axes[0, j], get(15, w, "k"), f"K — video {w} (L15 H{HEAD})")
-    heat(axes[1, j], get(15, w, "v"), f"V — video {w} (L15 H{HEAD})")
+    hk = surf(fig.add_subplot(2, 3, j + 1, projection="3d"), get(15, w, "k"), f"K — video {w} (L15)", head=hk)
+    hv = surf(fig.add_subplot(2, 3, 3 + j + 1, projection="3d"), get(15, w, "v"), f"V — video {w} (L15)", head=hv)
 fig.suptitle("SF KV values across the video — begin / mid / end (identical walls, no drift)", fontsize=12)
 fig.tight_layout(); fig.savefig(os.path.join(FIGS, "sf_kv_time.png"), dpi=140); plt.close(fig)
 
@@ -65,22 +82,18 @@ ax1.set_ylabel("token norm / block median")
 ax1.set_title("K/V token norm inside a chunk (L15, 6 blocks pooled)", fontsize=10)
 ax1.legend(); ax1.grid(alpha=0.3)
 
-ax2 = fig.add_subplot(1, 2, 2)
-x = get(15, "mid", "k")[:4680]
-m = x[:, HEAD, :].numpy(); v = np.percentile(np.abs(m), 99.5)
-ax2.imshow(m[::6], aspect="auto", cmap="coolwarm", vmin=-v, vmax=v)
-for fb in (FSL // 6, 2 * FSL // 6):
-    ax2.axhline(fb, color="black", lw=0.8, ls="--")
-ax2.set_title("K values of ONE block (3 latent frames, L15 H6)\nchannel walls run straight through frame boundaries", fontsize=9)
-ax2.set_xlabel("Channel"); ax2.set_ylabel("Token (dashes = frame starts)")
+ax2 = fig.add_subplot(1, 2, 2, projection="3d")
+surf(ax2, get(15, "mid", "k")[:4680],
+     "K values of ONE block (3 latent frames, L15)\nblack floor lines = frame starts; walls run straight through",
+     marks=(FSL, 2 * FSL))
 fig.suptitle("SF KV inside a generation chunk — no sink tokens, walls uniform", fontsize=12)
 fig.tight_layout(); fig.savefig(os.path.join(FIGS, "sf_kv_chunk.png"), dpi=140); plt.close(fig)
 
 # ---------------- Fig C: depth ----------------
-fig = plt.figure(figsize=(15, 10))
+fig = plt.figure(figsize=(16, 12))
 for j, l in enumerate(LAYERS):
-    heat(fig.add_subplot(3, 3, j + 1), get(l, "mid", "k"), f"K — layer {l} (mid window)")
-    heat(fig.add_subplot(3, 3, 3 + j + 1), get(l, "mid", "v"), f"V — layer {l} (mid window)")
+    surf(fig.add_subplot(3, 3, j + 1, projection="3d"), get(l, "mid", "k"), f"K — layer {l} (mid window)")
+    surf(fig.add_subplot(3, 3, 3 + j + 1, projection="3d"), get(l, "mid", "v"), f"V — layer {l} (mid window)")  # per-layer hottest head
 axk = fig.add_subplot(3, 3, 7)
 axk.boxplot([get(l, "mid", "k").norm(dim=-1).flatten().numpy() for l in LAYERS],
             tick_labels=[f"L{l}" for l in LAYERS], flierprops=dict(marker=".", markersize=2))
