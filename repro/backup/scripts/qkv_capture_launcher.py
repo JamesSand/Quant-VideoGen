@@ -21,6 +21,7 @@ from wan.modules import causal_model as cm
 OUT = os.environ["QKV_OUT"]
 TARGET = os.environ["QKV_TARGET"]
 LAYERS = {int(x) for x in os.getenv("QKV_LAYERS", "0,15,29").split(",")}
+ALL_STEPS = os.getenv("QKV_ALL_STEPS", "0") == "1"   # keep every denoise step, not just last
 WINDOWS = []
 for rng in os.getenv("QKV_WINDOWS", "0-5,87-92,174-179").split(","):
     a, b = rng.split("-")
@@ -49,11 +50,15 @@ def _patched_prerope(self, kv_cache, current_start, q, k, v, block_mask, grid_si
         frame_seqlen = int(grid_sizes[0][1] * grid_sizes[0][2])
         sf = current_start // frame_seqlen
         if _in_windows(int(sf)):
-            _slots[(lyr, int(sf))] = {
+            rec = {
                 "q": q.detach().to("cpu", copy=True),
                 "k": k.detach().to("cpu", copy=True),
                 "v": v.detach().to("cpu", copy=True),
             }
+            if ALL_STEPS:
+                _slots.setdefault((lyr, int(sf)), []).append(rec)
+            else:
+                _slots[(lyr, int(sf))] = rec
     return _orig_prerope(self, kv_cache, current_start, q, k, v, block_mask, grid_sizes, freqs, seq_lens, s)
 
 
