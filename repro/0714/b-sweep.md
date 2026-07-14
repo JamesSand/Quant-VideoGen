@@ -3,7 +3,12 @@
 目标：隔离**块大小 B** 单一变量，看三种方法对 B 的敏感度。
 固定量：INT2、LongCat 单段续写（seed 0、prompt_idx 1、cond 73 帧）、评测 = frame-93 首帧 PSNR vs `results/longcat/bf16/1-0/segment_1.mp4`。
 
-## 总矩阵（PSNR dB ｜ 括号内 BPE@LC chunk 29,640）
+## 总矩阵
+
+**格子格式**：`PSNR ± std (n=独立重复次数)（BPE）`
+- `n=3` = 三次独立运行的 mean±std（QVG 非确定性，必须重复）；`n=1` = 单次（QuaRot 类确定性方法 σ≤0.003 已验证，单次即精确值）
+- 括号 = 该配置的 BPE（bit/元素，@LC chunk 29,640）——每格的"存储价格"，横向比较 PSNR 时须对照
+
 
 | 方法 \ B | **16** | **64** | **128** |
 |---|---:|---:|---:|
