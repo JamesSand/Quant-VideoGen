@@ -27,7 +27,7 @@ repro/
 
 ## 约定
 
-- 每个工作日在 `repro/` 下开一个 `MMDD/` 目录，日报命名 `report-MMDD.md`，收尾写 `HANDOFF.md`。
+- 每个工作日在 `repro/` 下开一个 `MMDD/` 目录，日报命名 `report-MMDD.md`，收尾写 `HANDOFF.md`，并附 `REPRODUCE.md`（当日全部实验的具体指令与参数）。
 - 跨天复用的脚本/数据一律放 `backup/`，日期目录只放当日产物与文档。
 - 大文件（视频、日志、JIT 缓存、批量帧图）不入库，md 中注明本地路径。
 - 每个 deliverable 完成即 commit + push。
