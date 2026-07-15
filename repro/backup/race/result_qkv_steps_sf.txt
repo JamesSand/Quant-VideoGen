@@ -1,0 +1,2 @@
+START 2026-07-14_23:26:15 tag=qkv_steps_sf node=research-common-h100-116.cloud.together.ai
+OK
