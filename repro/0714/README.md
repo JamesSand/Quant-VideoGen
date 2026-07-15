@@ -7,8 +7,8 @@
 
 | 文档 | 内容 |
 |---|---|
-| [summary-0714.md](summary-0714.md) | **演示用汇总**（self-contained 五节：BPE / B 扫描 / 速度 / TNI 检验 / DeltaQuant 与 timestep）——对外 present 用这份 |
-| [report-0714.md](report-0714.md) | 日报正文：量化代码考古（六阶段地图、无 Hadamard）、真实 BPE 核算与对账、QVG/Pro 参数全表、B=64 对照与九宫格汇总、paper 测速口径与 §3.5 实测 |
+| [report-0714.md](report-0714.md) | **演示用汇总**（self-contained 五节：BPE / B 扫描 / 速度 / TNI 检验 / DeltaQuant 与 timestep）——对外 present 用这份 |
+| [details-0714.md](details-0714.md) | 日报正文：量化代码考古（六阶段地图、无 Hadamard）、真实 BPE 核算与对账、QVG/Pro 参数全表、B=64 对照与九宫格汇总、paper 测速口径与 §3.5 实测 |
 | [b-sweep.md](b-sweep.md) | B 扫描九宫格台账（矩阵、出处、执行方式、结果读数） |
 | [kv-distributions.md](kv-distributions.md) | 三模型 K/V 分布 3D 曲面 + token norm 统计（OScaR Fig.2/3 口径）；HY 双分支结构注记 |
 | [qkv-anatomy.md](qkv-anatomy.md) | SF 的 KV 值与 QKV norm 三维度解剖（视频首尾/chunk 内部/层深；L29 H9 整头离群） |

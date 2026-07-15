@@ -1,14 +1,14 @@
 # 0714 Handoff — 代码考古/BPE/速度三问 · B 扫描 · KV/QKV 分布解剖 · 三篇论文精读
 
-> 演示用汇总：[summary-0714.md](summary-0714.md)（五节，self-contained，可直接 present）
-> 日报正文：[report-0714.md](report-0714.md)；实验台账：[b-sweep.md](b-sweep.md)
+> 演示用汇总：[report-0714.md](report-0714.md)（五节，self-contained，可直接 present）
+> 日报正文：[details-0714.md](details-0714.md)；实验台账：[b-sweep.md](b-sweep.md)
 > 复现指令：[REPRODUCE.md](REPRODUCE.md)；文档地图：[README.md](README.md)
 
 ## 今日完成（按时间序）
 
 | # | 工作 | 关键结果 | 产物 |
 |---|---|---|---|
-| 1 | **三问调查**（代码考古 / BPE / 速度口径） | ①QVG pipeline 六阶段 file:line 地图，**全 repo 无 Hadamard**，"INT2"实为三元；②BPE 公式 `r + 8/B + S·8/128 + S·4096/N` 与 README 显存**逐字节吻合**（67.318 vs 67.32 MB/层），paper 6.94× vs 发布配置 6.88×（chunk 假设差 17%），附录 Table 5 漏记 scale 项；③paper 只报端到端开销百分比，无任何 kernel 级 benchmark | report-0714.md §1-3 |
+| 1 | **三问调查**（代码考古 / BPE / 速度口径） | ①QVG pipeline 六阶段 file:line 地图，**全 repo 无 Hadamard**，"INT2"实为三元；②BPE 公式 `r + 8/B + S·8/128 + S·4096/N` 与 README 显存**逐字节吻合**（67.318 vs 67.32 MB/层），paper 6.94× vs 发布配置 6.88×（chunk 假设差 17%），附录 Table 5 漏记 scale 项；③paper 只报端到端开销百分比，无任何 kernel 级 benchmark | details-0714.md §1-3 |
 | 2 | repro/ 目录重构 | `0713/ 0714/ backup/` 三层结构；脚本内路径全部改写；first_frames/limit_videos 归入 backup | repro/README.md |
 | 3 | **papers/ 建立**，三篇论文入库精读 | 2602.02958（QVG 本体）、2605.26266（Jensen bias 校正）、**2605.19660 OScaR**（TNI 诊断，美团 LongCat 团队）、DeltaQuant CVPR26（timestep 动态性）——各附与本项目的关联 | papers/README.md |
 | 4 | QVG vs QVG-Pro 参数全表 | dataclass 默认值就是 Pro（S=4/B=16）但**无任何官方 Pro 发布脚本**；iters 官方脚本内部差 50 倍（LC 100 vs SF/HY 2） | report §1.3 |
@@ -21,7 +21,7 @@
 | 11 | **QKV 三维度解剖**（SF：时间窗 × chunk 内部 × 层深） | ①视频首尾分布**无漂移**（<5%）；②chunk 内无 sink；③**L29 的 H9 整头离群**（norm≈105 vs 其他头 15，absmax 93.5 vs 13.1）——归因：**W_k 能量集中 16.6×（ch95）× g 增益 5.4 对齐相乘**（corr 0.83），本质是两根巨型通道（ch95/ch49） | qkv-anatomy.md、qk-norm.md 附录 |
 | 12 | QK-Norm 机制文档 + g 可视化 | g = 训练学出的共享参数（非逐 token）；**Wan 整维归一 vs Qwen3 逐头归一**——前者允许整头倾斜（H9 的存在条件）；勘误：QK-Norm 挡不住 TNI（Qwen3 有 QK-Norm 仍被 OScaR 观察到 sink）；vendor 了 modeling_qwen3.py 作证据 | qk-norm.md、figs/qk_norm_*.png、reference/ |
 | 13 | **timestep 轴动态实测**（同一 block 全部去噪 forward） | **V 模式级剧变 corr≈0.33**、中层 Q/K 0.64-0.66、**L29 巨型通道跨步静态 0.95-0.99**；SF cache 存的是去噪后干净重编码的 K/V → 步间漂移不进 cache；补齐 image-vs-video 辨析（幅度级 vs 模式级，DeltaQuant 未做的对照） | summary §5、figs/qkv_timestep_dynamics.png |
-| 14 | summary-0714.md 演示文档 | 五节 self-contained：BPE 表（QVG/Pro/QuaRot 对称+非对称）、B 扫描、速度、TNI 检验、DeltaQuant/timestep | summary-0714.md |
+| 14 | report-0714.md 演示文档 | 五节 self-contained：BPE 表（QVG/Pro/QuaRot 对称+非对称）、B 扫描、速度、TNI 检验、DeltaQuant/timestep | report-0714.md |
 | 15 | 双远端 | 新增 remote `together` → **github.com/togethercomputer/quant-video-gen**，全史已推 | git remote |
 
 ## 关键数字速查

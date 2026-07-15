@@ -55,7 +55,7 @@ bash repro/backup/scripts/pod_run_paperspeed.sh hy   # 12 chunk 匹配几何，b
 **⚠️ 墙钟陷阱（HY 教训）**：pod 内第一臂独自支付冷 PVC 权重加载（HY 实测 ~336s），
 `result_paperspeed_*.txt` 里的 wall 只能看趋势；**正式数字必须用日志内生成计时**——
 HY 用 `Generate time for chunk N` 的稳态段（chunk 4-11）、SF 用去噪 tqdm、LC 用分段
-tqdm 均值。修正后：LC −19.9%、SF −5.0%、HY −30.2%（report-0714.md §3.5）。
+tqdm 均值。修正后：LC −19.9%、SF −5.0%、HY −30.2%（details-0714.md §3.5）。
 
 ## 4. KV 分布采集与 3D 图（三模型）
 
