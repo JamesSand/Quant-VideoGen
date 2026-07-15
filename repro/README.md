@@ -8,7 +8,7 @@ repro/
 │   ├── report-0713.md    当日日报（总表 / clip 扫描 / 方差研究 / 张量刨析）
 │   ├── HANDOFF.md        当日收尾交接：完成事项、关键数字、开放问题、次日候选方向
 │   └── first_frames/     当日首帧对比图（contact sheet + 单帧）
-├── 0714/        ← 当前工作日（含 rope-dispersion.md：RoPE 分散性推导，自 backup 迁入）
+├── 0714/        ← 三问调查+B扫描+KV/QKV分布解剖+论文精读（summary/report/HANDOFF/REPRODUCE 齐备）
 └── backup/      ← 日期目录之外的全部积累
     ├── REPORT.md             复现总报告（结论层，入口文档）
     ├── EXPERIMENTS.md        全部实验明细（≥10 次 QuaRot 尝试等）
