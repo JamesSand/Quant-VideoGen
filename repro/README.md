@@ -26,7 +26,12 @@ repro/
 
 ## 约定
 
-- 每个工作日在 `repro/` 下开一个 `MMDD/` 目录，日报命名 `report-MMDD.md`，收尾写 `HANDOFF.md`，并附 `REPRODUCE.md`（当日全部实验的具体指令与参数）。
+- **每个日期工作目录（`MMDD/`）必须包含三个 md 文件**：
+  | 文件 | 定位 |
+  |---|---|
+  | `report-MMDD.md` | 当日日报，**拿去 present 的文件**——self-contained（背景 + 证据图表 + 结论），外人不读其他文档也能懂；技术深挖放独立专题 md（如 `details-MMDD.md`） |
+  | `HANDOFF.md` | 收尾交接：当日完成表、关键数字速查、悬而未决、次日候选方向 |
+  | `REPRODUCE.md` | 当日**全部实验**的具体复现指令与参数——runner 用法、确切扫描点、pod 命令、评测口径与代码片段，一律从实际脚本抄录 |
 - 跨天复用的脚本/数据一律放 `backup/`，日期目录只放当日产物与文档。
 - 大文件（视频、日志、JIT 缓存、批量帧图）不入库，md 中注明本地路径。
 - 每个 deliverable 完成即 commit + push。
