@@ -9,6 +9,13 @@ repro/
 │   ├── HANDOFF.md        当日收尾交接：完成事项、关键数字、开放问题、次日候选方向
 │   └── first_frames/     当日首帧对比图（contact sheet + 单帧）
 ├── 0714/        ← 三问调查+B扫描+KV/QKV分布解剖+论文精读（summary/report/HANDOFF/REPRODUCE 齐备）
+├── k8s/         ← 集群操作知识库（跨天）：接入/诊断/选节点/规范开 pod
+│   ├── README.md                    k8s 文件夹入口与索引
+│   ├── cluster-access.md            kubeconfig / RBAC / kubectl 持久化 / PVC（开 pod 前必读）
+│   ├── gpu-occupancy-diagnosis.md   "卡满却看不到进程" 排查手册（含 charlie/GLM-5.2 实例）
+│   ├── pod-config-comparison.md     规范申请 vs 账外占卡：逐字段对比
+│   ├── find-free-nodes.md           扫"记账+账外皆空"的整机：方法+脚本+快照
+│   └── dev-8gpu-vetted.yaml         现成 8 卡 dev pod（nodeAffinity 限定已核验空闲节点）
 └── backup/      ← 日期目录之外的全部积累
     ├── REPORT.md             复现总报告（结论层，入口文档）
     ├── EXPERIMENTS.md        全部实验明细（≥10 次 QuaRot 尝试等）
@@ -33,5 +40,6 @@ repro/
   | `HANDOFF.md` | 收尾交接：当日完成表、关键数字速查、悬而未决、次日候选方向 |
   | `REPRODUCE.md` | 当日**全部实验**的具体复现指令与参数——runner 用法、确切扫描点、pod 命令、评测口径与代码片段，一律从实际脚本抄录 |
 - 跨天复用的脚本/数据一律放 `backup/`，日期目录只放当日产物与文档。
+- 集群操作层（怎么接入/诊断/选节点）放 `k8s/`；逐实验的 pod manifest 与提交脚本仍在 `backup/pods/`、`backup/scripts/pod_run_*.sh`。
 - 大文件（视频、日志、JIT 缓存、批量帧图）不入库，md 中注明本地路径。
 - 每个 deliverable 完成即 commit + push。

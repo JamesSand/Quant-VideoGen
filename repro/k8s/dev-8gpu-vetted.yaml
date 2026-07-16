@@ -1,0 +1,85 @@
+# 8-GPU dev pod —— 规范写法(走 device plugin 记账,不绕过调度)。
+# 与原始 dev pod 的唯一区别:nodeAffinity 只允许落到「已核验空闲」的节点
+#   (记账+账外皆空,扫描口径见 find-free-nodes.md)。节点是快照,过一阵需重扫。
+# 应用: KUBECONFIG 已在 ~/.bashenv 配好,直接 `kubectl apply -f dev-8gpu-vetted.yaml`
+apiVersion: v1
+kind: Pod
+metadata:
+  name: zhizhousha-dev-8gpu-v3          # 换个名,避免和当前 dev pod 冲突
+  namespace: zhizhousha
+  labels:
+    owner: zhizhousha
+    purpose: interactive-dev-8gpu
+spec:
+  hostIPC: true
+  hostNetwork: true
+  nodeSelector:
+    node-group: default
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              # 只允许调度到这些已核验的空闲整机(8 卡、记账0、无账外占用者)@2026-07-16
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                  - research-common-h100-005.cloud.together.ai
+                  - research-common-h100-050.cloud.together.ai
+                  - research-common-h100-051.cloud.together.ai
+                  - research-common-h100-064.cloud.together.ai
+                  - research-common-h100-068.cloud.together.ai
+                  - research-common-h100-073.cloud.together.ai
+                  - research-common-h100-079.cloud.together.ai
+                  - research-common-h100-097.cloud.together.ai
+                  - research-common-h100-099.cloud.together.ai
+                  - research-common-h100-110.cloud.together.ai
+                  - research-common-h100-114.cloud.together.ai
+  runtimeClassName: nvidia
+  containers:
+    - name: pytorch
+      image: nvcr.io/nvidia/pytorch:25.11-py3
+      command: ["/bin/bash", "-c"]
+      args:
+        - |
+          if ! command -v sudo &>/dev/null; then
+            apt-get update -qq && apt-get install -y -qq sudo
+          fi
+          if ! id zhizhousha &>/dev/null; then
+            useradd -u 1001 -g 0 -d /home/zhizhousha -s /bin/bash -M zhizhousha
+          fi
+          echo "zhizhousha ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/zhizhousha
+          chown -R zhizhousha:root /home/zhizhousha
+          chmod 755 /home/zhizhousha
+          sleep infinity
+      workingDir: /home/zhizhousha
+      env:
+        - name: HOME
+          value: /home/zhizhousha
+        - name: BASH_ENV
+          value: /home/zhizhousha/.bashenv
+      resources:
+        requests:
+          cpu: "96"
+          memory: 700Gi
+          nvidia.com/gpu: "8"          # ← 保留:走 device plugin 合法申请,受调度器保护
+        limits:
+          cpu: "96"
+          memory: 700Gi
+          nvidia.com/gpu: "8"
+      securityContext:
+        privileged: true
+      volumeMounts:
+        - name: home
+          mountPath: /home/zhizhousha
+        - name: shared
+          mountPath: /shared
+  volumes:
+    - name: home
+      persistentVolumeClaim:
+        claimName: home-zhizhousha
+    - name: shared
+      persistentVolumeClaim:
+        claimName: shared-data
+# 空闲节点快照 @ 2026-07-16 ~21:5x(共 12 台空闲;058 只有 7 卡已剔除)。
+# 重扫方法见 find-free-nodes.md;或直接依赖 nvidia.com/gpu:8 让调度器兜底。
