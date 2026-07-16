@@ -1,6 +1,6 @@
 # PCA-KV 实验结果（Phase-1 七臂 + Auto-research 最终算法）
 
-目标：把 [pca-kv-plan.md](pca-kv-plan.md) 的方案落到真实生成——实现 fake-quant 编解码，
+目标：把"mean/PCA 低秩 + 2bit 残差"方案落到真实生成——实现 fake-quant 编解码，
 LongCat 单段续写，**frame-93 首帧 PSNR** 与 QVG/k-means 系对打（同 BPE 档位）。
 谱分析（[pca-spectrum.md](pca-spectrum.md)）已给出依据：r=8 拆墙、残差高斯化、按 chunk 重算基。
 
