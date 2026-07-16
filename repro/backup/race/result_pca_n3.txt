@@ -1,0 +1,2 @@
+START 2026-07-16_19:54:39 tag=pca_n3 R=6 cb=2 res=asym vm=mean rb=128 node=local-devbox
+OK
