@@ -1,5 +1,10 @@
 """Precompute per-frame PSNR/SSIM/LPIPS arrays for every method-vs-bf16 pair.
 
+LPIPS follows the PAPER convention deliberately: frames in [0,1] fed to lpips(vgg)
+WITHOUT the library's [-1,1] normalization (replicates official metric.py:131).
+Numbers are NOT comparable to standard-normalized LPIPS from other papers.
+Arrays computed before 2026-07-16 used [-1,1] normalization — do not mix.
+
 Output: repro/backup/protosearch/<name>.npz with keys psnr, ssim, lpips (float64,
 one value per frame index, full video length, frame 0 included).
 """
@@ -82,7 +87,7 @@ for name, (p1, p2) in PAIRS.items():
             mse = ((a - b) ** 2).mean().item()
             psnr.append(10 * np.log10(1 / mse) if mse > 0 else np.inf)
             ssim.append(calc_ssim(a.unsqueeze(0), b.unsqueeze(0)))
-            lpv.append(lp(a.unsqueeze(0) * 2 - 1, b.unsqueeze(0) * 2 - 1).item())
+            lpv.append(lp(a.unsqueeze(0), b.unsqueeze(0)).item())  # PAPER convention: feed [0,1] directly (metric.py:131 quirk), adopted as project standard 2026-07-16
     np.savez(f"{OUT}/{name}.npz", psnr=np.array(psnr), ssim=np.array(ssim), lpips=np.array(lpv))
     index[name] = {"frames": n, "src": p2}
     print(f"{name}: {n} frames  psnr[93..96]={[round(x,2) for x in psnr[93:97]]}" if n > 96 else f"{name}: {n} frames")
