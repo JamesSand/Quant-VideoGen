@@ -21,6 +21,12 @@ PCA_COEFF_BITS = int(os.environ.get("PCA_COEFF_BITS", "2"))
 PCA_RES_GRID = os.environ.get("PCA_RES_GRID", "ternary")
 PCA_V_MODE = os.environ.get("PCA_V_MODE", "mean")
 RES_BLOCK = int(os.environ.get("PCA_RES_BLOCK", "64"))
+K_BASIS_FILE = os.environ.get("PCA_K_BASIS_FILE", "")
+_K_BASIS = None          # [L, H, D, D] eigvecs ascending（OSCAR 式离线校准基）
+_LAYER_CTR = [0]
+
+if K_BASIS_FILE:
+    _K_BASIS = torch.load(K_BASIS_FILE, map_location="cpu")["eigvecs"]
 
 
 def _asym_quant_lastdim_grouped(x, bits, group):
@@ -49,8 +55,9 @@ def _quant_residual(x):
     return _asym_quant_lastdim_grouped(x, 2, RES_BLOCK)
 
 
-def pca_fake_quant(x, r):
-    """x: [B, H, S, D] -> fake-quantized same shape/dtype. r=0 -> mean-only."""
+def pca_fake_quant(x, r, fixed_basis=None):
+    """x: [B, H, S, D] -> fake-quantized same shape/dtype. r=0 -> mean-only.
+    fixed_basis: [H, D, D] ascending eigvecs -> use its top-r instead of chunk eigh."""
     prev_tf32 = torch.backends.cuda.matmul.allow_tf32
     torch.backends.cuda.matmul.allow_tf32 = False
     try:
@@ -59,9 +66,13 @@ def pca_fake_quant(x, r):
         mu = X.mean(dim=1, keepdim=True)                      # [BH,1,D]
         Xc = X - mu
         if r > 0:
-            cov = torch.einsum("bsd,bse->bde", Xc, Xc) / S    # [BH,D,D]
-            _, vecs = torch.linalg.eigh(cov)                  # ascending
-            Vr = vecs[:, :, -r:]                              # [BH,D,r] top-r
+            if fixed_basis is not None:
+                Vr = fixed_basis.to(Xc.device, torch.float32)[:, :, -r:]  # [H,D,r]
+                Vr = Vr.repeat(B, 1, 1) if B > 1 else Vr
+            else:
+                cov = torch.einsum("bsd,bse->bde", Xc, Xc) / S    # [BH,D,D]
+                _, vecs = torch.linalg.eigh(cov)                  # ascending
+                Vr = vecs[:, :, -r:]                              # [BH,D,r] top-r
             c = torch.einsum("bsd,bdr->bsr", Xc, Vr)          # [BH,S,r]
             c_hat = _asym_quant_lastdim_grouped(c, PCA_COEFF_BITS, r)
             lowrank = torch.einsum("bsr,bdr->bsd", c_hat, Vr)
@@ -76,6 +87,11 @@ def pca_fake_quant(x, r):
 
 
 def pca_fake_quant_kv(k, v):
-    k_q = pca_fake_quant(k, PCA_R)
+    kb = None
+    if _K_BASIS is not None:
+        layer = _LAYER_CTR[0] % _K_BASIS.shape[0]
+        _LAYER_CTR[0] += 1
+        kb = _K_BASIS[layer]
+    k_q = pca_fake_quant(k, PCA_R, fixed_basis=kb)
     v_q = pca_fake_quant(v, PCA_R if PCA_V_MODE == "pca" else 0)
     return k_q, v_q

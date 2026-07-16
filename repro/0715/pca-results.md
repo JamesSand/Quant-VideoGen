@@ -93,3 +93,27 @@ Pareto 全面占优**；叠加固有优势：encode 比 k-means 便宜 ~178×（
 单 prompt/seed（与既有全部数字同口径）；建议多 prompt 复验后定稿。真 kernel 化
 （batched 128×128 eigh + 小 GEMM decode）与 QVG 速度对打是工程下一步。
 复现：`pod_run_pca.sh pca_n4 4 2 asym pca 128`，评测 `pca_eval.py`。
+
+
+---
+
+## 结果三：OSCAR 式 attention-aware 基的检验（负结果，0716）
+
+借鉴 OSCAR（arXiv 2605.17757）的 qqt 目标——K 的基不用自协方差、改用**校准集上 Q 的协方差**
+（"query 实际探测的方向"）。两遍法实现：pass-1 干净生成钩 `q_norm` 输出累计每 (层,head)
+QᵀQ（873k token/层）→ 特征基存盘；pass-2 用该固定基替换 K 的 chunk 自协方差基
+（`oscar_calib_launcher.py` + `pca_quant.py` 的 `PCA_K_BASIS_FILE`）。
+
+| 臂 | K 基 | r | BPE | frame-93 PSNR |
+|---|---|---:|---:|---:|
+| N4（对照） | 自协方差（chunk 现算） | 4 | 2.253 | **31.788** |
+| O1 | QᵀQ（离线校准） | 4 | 2.253 | 28.883（−2.91） |
+| O1b | QᵀQ | 8 | 2.317 | 31.327（−0.46，且更贵） |
+
+**结论：attention-aware 基不适用于减法式方案**。机制：OSCAR 的 qqt 服务于**旋转**
+（保留全 128 维，基只决定能量在量化块间怎么排布，query 偏好的排序对分块有利）；
+我们的方案是**减法**（只保 top-r，其余进残差）——需要的是"K 的能量/墙住在哪"
+（自协方差），不是"query 往哪看"。Q 的 top-4 方向漏掉了 K 的部分墙 → 残差留墙 →
+掉回 QVG 水平；r=8 靠交集变大追回大半，但任何同价点都严格劣于自协方差。
+**边界划清：数据自适应基的目标函数必须与基的用法匹配——旋转配 attention-aware，
+减法配能量主导。**（校准基础设施保留，可复用于未来旋转式变体。）
