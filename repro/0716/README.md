@@ -13,7 +13,7 @@
 | [vbench-repro.md](vbench-repro.md) | VBench A.1 复现（700f 相对差与 paper 精确吻合）+ **N4 第四指标与 QVG 打平**（保真无画质税）+ 3 条上游口径缺口 |
 | [sf-ref-metrics.md](sf-ref-metrics.md) | SF 三指标（onset 协议，paper 无 SF 行故为自建对比）：**QVG 38.65 vs N4 38.52，起点打平**；600-latent 配置不匹配伪影作废说明 |
 | [metric-matrix.md](metric-matrix.md) | **标准评测矩阵约定（(LC×SF×HY)×(INT2×INT4)）**+ 现状：INT4 新增 LC 33.75（散布内）/ **HY 35.711（与原 REPORT 逐位一致）**；空格清单（HY×N4、N4-INT4 档定义、SF×INT4） |
-| [hy-ref-metrics.md](hy-ref-metrics.md) | HY 三指标（既定 [23,36) 起点窗口）：QVG match paper（26.78 vs 29.17，±2.6dB 标准内）；**N4 26.21/0.9765/0.1427 vs QVG 26.78/0.9663/0.1597——PSNR 微差、SSIM/LPIPS 反超**（256 维头未调参） |
+| [hy-ref-metrics.md](hy-ref-metrics.md) | **HY 协议考古 + 平台期结论（经协议级修正）**：HY 是平台+断崖结构（断崖=帧29 pose 回访点）；paper 三元组=跨崖窗口形状（我们 [20,32)=31.1/0.882/0.099，SSIM/LPIPS 与 paper 精确重合），HY 参考管线未完整发布；平台期协议下 **N4 输 QVG 3.1 dB**（31.98 vs 35.11）；含全局 SSIM 实现勘误 |
 | figs/ | 本日图表 |
 
 ## 今天干了什么（含跨 0715/0716 凌晨的连续工作）
@@ -50,9 +50,10 @@
 2. **N4 真 kernel 化**：①位打包+融合 decode（解锁长度/显存故事，现 fake-quant 只能
    777 帧）②流式 encode 追平（对 iters=2 QVG 慢 23×；抓手=低精度协方差 GEMM +
    基跨 chunk 热启动——KV 平稳性已证，子空间应漂得慢）
-3. **N4 泛化**：~~HY 一次未测；SF 只有 VBench 没有参考指标~~ → 已补齐：三模型全覆盖，
-   N4 战绩 = LC 大胜 / SF 起点打平 / HY 打平（PSNR −0.58、SSIM/LPIPS 反超，256 维头未调参）
-   ——**无一处输**；HY 的 r/残差块适配是现成提升抓手
+3. **N4 泛化**：三模型已全覆盖，修正后战绩 = **LC 大胜（+3.1 dB，SSIM 也 match paper
+   实现）/ SF 起点打平 / HY 落败（平台期 −3.1 dB）**（初报"HY 打平、无一处输"是跨崖
+   窗口+错误全局 SSIM 的伪影，已撤回，见 hy-ref-metrics.md）；HY 的 256 维头适配
+   （r=8 / 半头分裂）是现成补救假设，待拍板
 4. **质量再挖**（有现成假设）：按深度重分配预算（L29 热点）、K/V 分离调秩
 5. **收尾债务**：0715/0716 三件套；ISSUE_DRAFT 更新发送（累计 5+ 条上游问题：
    B=128 kernel bug、SF fake 路径矛盾、滑窗缺失、LPIPS 怪癖、BF16@1400 不可复现）
