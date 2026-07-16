@@ -1,5 +1,5 @@
 """Mean/PCA low-rank + quantized-residual fake-quant for KV cache (plan:
-repro/0715/pca-psnr-plan.md).
+repro/0715/pca-results.md).
 
 Scheme per (batch, head) over a chunk X [S, D]:
   X ≈ mu + quant(coeff) @ V_r^T + quant(residual)

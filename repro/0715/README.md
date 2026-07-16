@@ -1,11 +1,15 @@
 # 0715 工作目录
 
-收尾三件套：`report-0715.md`（present 用，self-contained）+ `HANDOFF.md` + `REPRODUCE.md`（见 repro/README.md 约定）。
+收尾三件套（report-0715.md / HANDOFF.md / REPRODUCE.md）待写，见 repro/README.md 约定。
 
-## 从 0714 接手的候选方向（详见 [../0714/HANDOFF.md](../0714/HANDOFF.md)）
+## 文档地图
 
-1. **Proxy 排行榜研究**——cache-MSE 已被证明是坏 proxy；60+ 已标注配置在手，`results/kvplot/sf_qkv.pt` 已含 Q（部分解锁），可算注意力输出 MSE / 注意力图 KL 等候选 proxy 的秩相关
-2. **多 prompt 稳健性复验**——全部首帧结论目前单 prompt/seed；INT4 p99.7 悖论也待复验
-3. **LC/HY 的 QKV 三维度解剖**——采集器已通用化，各一条 pod
-4. **按深度重分配量化预算**——L29 K absmax 7× 的直接推论，现成可跑
-5. **trit 打包**工程验证 / **稀疏离群旁路** / **RoPE 直观图**（step3 脚本已备）/ ISSUE_DRAFT 更新发送（等确认）
+| 文档 | 内容 |
+|---|---|
+| [pca-results.md](pca-results.md) | **PCA-KV 主结果**：Phase-1 七臂 + auto-research 最终算法（N4：31.79 @ BPE 2.253，双超 QVG） |
+| [pca-spectrum.md](pca-spectrum.md) | Phase-0 谱分析：K 中低秩、r=8 拆墙（150×→2.6×）、拆墙前后可视化、基须按 chunk 重算 |
+| [w8a8-kv2-plan.md](w8a8-kv2-plan.md) | W8A8 + 2bit KV 计划（**未启动**，Phase 0 六臂待拍板） |
+| figs/ | PCA 谱/拆墙图等 |
+
+已删除：pca-kv-plan.md（总计划，各阶段全部执行完毕、内容被上述结果文档覆盖）；
+pca-psnr-plan.md 计划章节（并入 pca-results.md）。

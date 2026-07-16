@@ -1,6 +1,6 @@
 # PCA 谱分析：KV activation 的低秩性实测（Phase 0，纯本地）
 
-计划：[pca-kv-plan.md](pca-kv-plan.md)。数据：SF `sf_qkv.pt`（L15/L29，mid 窗 9,360 token）、
+结果汇总：[pca-results.md](pca-results.md)。数据：SF `sf_qkv.pt`（L15/L29，mid 窗 9,360 token）、
 LC `lc_kv.pt`（L24，12,000 token）、HY `hy_kv.pt`（L13，12,000 token，D=256 双分支拼接）。
 口径：**per-head、中心化 PCA**（协方差特征分解），能量 = 特征值累积占比。
 脚本：`repro/backup/scripts/pca_spectrum.py`。

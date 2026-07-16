@@ -1,4 +1,4 @@
-"""Phase-0 PCA spectrum analysis of KV activations (plan: repro/0715/pca-kv-plan.md).
+"""Phase-0 PCA spectrum analysis of KV activations (results: repro/0715/pca-results.md).
 
 Per (model, layer, tensor): per-head centered PCA over tokens.
 Outputs: figs pca_spectrum / pca_h9 / pca_residual + printed stats for the md.
