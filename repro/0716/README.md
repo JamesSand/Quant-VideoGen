@@ -12,6 +12,7 @@
 | [kernel-speed.md](kernel-speed.md) | 同 chunk 干净 encode/decode 对决：N4 朴素 torch ≈ QVG-100、比 Pro 快 3.2×、**对流式 iters=2 QVG 慢 23×**；含对早前 "2.4×" 说法的勘误 |
 | [vbench-repro.md](vbench-repro.md) | VBench A.1 复现（700f 相对差与 paper 精确吻合）+ **N4 第四指标与 QVG 打平**（保真无画质税）+ 3 条上游口径缺口 |
 | [sf-ref-metrics.md](sf-ref-metrics.md) | SF 三指标（onset 协议，paper 无 SF 行故为自建对比）：**QVG 38.65 vs N4 38.52，起点打平**；600-latent 配置不匹配伪影作废说明 |
+| [metric-matrix.md](metric-matrix.md) | **标准评测矩阵约定（(LC×SF×HY)×(INT2×INT4)）**+ 现状：INT4 新增 LC 33.75（散布内）/ **HY 35.711（与原 REPORT 逐位一致）**；空格清单（HY×N4、N4-INT4 档定义、SF×INT4） |
 | [hy-ref-metrics.md](hy-ref-metrics.md) | HY 三指标（既定 [23,36) 起点窗口）：QVG match paper（26.78 vs 29.17，±2.6dB 标准内）；**N4 26.21/0.9765/0.1427 vs QVG 26.78/0.9663/0.1597——PSNR 微差、SSIM/LPIPS 反超**（256 维头未调参） |
 | figs/ | 本日图表 |
 
