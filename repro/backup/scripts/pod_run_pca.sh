@@ -1,17 +1,17 @@
 #!/bin/bash
-# mean/PCA KV fake-quant arm. Usage: pod_run_pca.sh <tag> <R> <coeff_bits> <res_grid> <v_mode>
+# mean/PCA KV fake-quant arm. Usage: pod_run_pca.sh <tag> <R> <coeff_bits> <res_grid> <v_mode> [res_block=64]
 set -u
-TAG=${1:?}; R=${2:?}; CB=${3:?}; RG=${4:?}; VM=${5:?}
+TAG=${1:?}; R=${2:?}; CB=${3:?}; RG=${4:?}; VM=${5:?}; RB=${6:-64}
 cd /home/zhizhousha/workspace/video-project/Quant-VideoGen
 . .venv/bin/activate
 . repro/backup/scripts/env_fix.sh
 export TRITON_CACHE_DIR=$PWD/repro/backup/triton_cache/$TAG
 mkdir -p $TRITON_CACHE_DIR repro/backup/race repro/backup/logs
 RESULT=repro/backup/race/result_$TAG.txt
-echo "START $(date +%F_%T) tag=$TAG R=$R cb=$CB res=$RG vm=$VM node=${NODE_NAME:-?}" > $RESULT
+echo "START $(date +%F_%T) tag=$TAG R=$R cb=$CB res=$RG vm=$VM rb=$RB node=${NODE_NAME:-?}" > $RESULT
 FREE_MB=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -1)
 if [ "$FREE_MB" -lt 72000 ]; then echo "NODE_BUSY free=${FREE_MB}MiB" >> $RESULT; exit 42; fi
-export PCA_R=$R PCA_COEFF_BITS=$CB PCA_RES_GRID=$RG PCA_V_MODE=$VM
+export PCA_R=$R PCA_COEFF_BITS=$CB PCA_RES_GRID=$RG PCA_V_MODE=$VM PCA_RES_BLOCK=$RB
 export PCA_TARGET=experiments/LongCat/run_long_t2v.py PYTHONPATH=experiments/LongCat
 torchrun --nproc_per_node=1 --standalone repro/backup/scripts/pca_launcher.py \
   --checkpoint_dir=ckpts/LongCat-Video --workload 480p_long_gen \
