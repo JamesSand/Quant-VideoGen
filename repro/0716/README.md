@@ -11,6 +11,7 @@
 | [mse-reduction.md](mse-reduction.md) | Fig.6 量化 MSE 缩减复现（K 10.9×/V 3.6×，定性成立）+ N4 张量级对比（V 侧全层胜 SAS）；附录含 INT2/INT4 全量原始数据 |
 | [kernel-speed.md](kernel-speed.md) | 同 chunk 干净 encode/decode 对决：N4 朴素 torch ≈ QVG-100、比 Pro 快 3.2×、**对流式 iters=2 QVG 慢 23×**；含对早前 "2.4×" 说法的勘误 |
 | [vbench-repro.md](vbench-repro.md) | VBench A.1 复现（700f 相对差与 paper 精确吻合）+ **N4 第四指标与 QVG 打平**（保真无画质税）+ 3 条上游口径缺口 |
+| [sf-ref-metrics.md](sf-ref-metrics.md) | SF 三指标（onset 协议，paper 无 SF 行故为自建对比）：**QVG 38.65 vs N4 38.52，起点打平**；600-latent 配置不匹配伪影作废说明 |
 | figs/ | 本日图表 |
 
 ## 今天干了什么（含跨 0715/0716 凌晨的连续工作）
