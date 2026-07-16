@@ -63,5 +63,9 @@ spec:
           - key: kubernetes.io/hostname
             operator: NotIn
             values:
+            - research-common-h100-052.cloud.together.ai
             - research-common-h100-055.cloud.together.ai
             - research-common-h100-059.cloud.together.ai
+            - research-common-h100-079.cloud.together.ai
+            - research-common-h100-099.cloud.together.ai
+            - research-common-h100-118.cloud.together.ai
