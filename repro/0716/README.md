@@ -12,6 +12,7 @@
 | [kernel-speed.md](kernel-speed.md) | 同 chunk 干净 encode/decode 对决：N4 朴素 torch ≈ QVG-100、比 Pro 快 3.2×、**对流式 iters=2 QVG 慢 23×**；含对早前 "2.4×" 说法的勘误 |
 | [vbench-repro.md](vbench-repro.md) | VBench A.1 复现（700f 相对差与 paper 精确吻合）+ **N4 第四指标与 QVG 打平**（保真无画质税）+ 3 条上游口径缺口 |
 | [sf-ref-metrics.md](sf-ref-metrics.md) | SF 三指标（onset 协议，paper 无 SF 行故为自建对比）：**QVG 38.65 vs N4 38.52，起点打平**；600-latent 配置不匹配伪影作废说明 |
+| [hy-ref-metrics.md](hy-ref-metrics.md) | HY 三指标（既定 [23,36) 起点窗口）：QVG match paper（26.78 vs 29.17，±2.6dB 标准内）；**N4 26.21/0.9765/0.1427 vs QVG 26.78/0.9663/0.1597——PSNR 微差、SSIM/LPIPS 反超**（256 维头未调参） |
 | figs/ | 本日图表 |
 
 ## 今天干了什么（含跨 0715/0716 凌晨的连续工作）
@@ -48,7 +49,9 @@
 2. **N4 真 kernel 化**：①位打包+融合 decode（解锁长度/显存故事，现 fake-quant 只能
    777 帧）②流式 encode 追平（对 iters=2 QVG 慢 23×；抓手=低精度协方差 GEMM +
    基跨 chunk 热启动——KV 平稳性已证，子空间应漂得慢）
-3. **N4 泛化**：HY 一次未测；SF 只有 VBench 没有参考指标；三模型补齐
+3. **N4 泛化**：~~HY 一次未测；SF 只有 VBench 没有参考指标~~ → 已补齐：三模型全覆盖，
+   N4 战绩 = LC 大胜 / SF 起点打平 / HY 打平（PSNR −0.58、SSIM/LPIPS 反超，256 维头未调参）
+   ——**无一处输**；HY 的 r/残差块适配是现成提升抓手
 4. **质量再挖**（有现成假设）：按深度重分配预算（L29 热点）、K/V 分离调秩
 5. **收尾债务**：0715/0716 三件套；ISSUE_DRAFT 更新发送（累计 5+ 条上游问题：
    B=128 kernel bug、SF fake 路径矛盾、滑窗缺失、LPIPS 怪癖、BF16@1400 不可复现）
