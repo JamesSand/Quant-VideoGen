@@ -1,0 +1,2 @@
+START 2026-07-16_00:56:23 tag=pca_p2 R=8 cb=2 res=ternary vm=mean node=research-common-h100-090.cloud.together.ai
+OK

@@ -1,0 +1,2 @@
+START 2026-07-16_00:56:20 tag=pca_p2v R=8 cb=2 res=ternary vm=pca node=research-common-h100-118.cloud.together.ai
+OK
