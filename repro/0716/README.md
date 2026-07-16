@@ -4,4 +4,5 @@
 
 | 文档 | 内容 |
 |---|---|
+| [ssim-lpips-validation.md](ssim-lpips-validation.md) | SSIM/LPIPS 首帧口径验证（SSIM 对上；LPIPS 发现官方 [0,1] 直喂怪癖）+ PCA-KV N4 三指标全胜 |
 | [qvg-evaluation.md](qvg-evaluation.md) | QVG 的 evaluation 体系梳理：质量指标（首帧 PSNR/SSIM/LPIPS）、压缩率账目、速度口径、benchmark 设置、口径缺口、我们的对照协议 |

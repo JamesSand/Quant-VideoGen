@@ -88,6 +88,11 @@ Pareto 全面占优**；叠加固有优势：encode 比 k-means 便宜 ~178×（
 2. **V-PCA 是被低估的大头（+1.2~1.5 dB）**：V 无通道墙但有内容相关性，PCA 吸的是
    后者；且 V 直接乘 attention 权重进输出，V 的保真度弹性更大。
 
+### 补充验证（0716）
+
+N4 的优势在 SSIM/LPIPS 上同样成立（SSIM 0.942 vs QVG 0.907；LPIPS 官方口径 0.067 vs
+0.089），排除过度平滑担忧——详见 `../0716/ssim-lpips-validation.md`。
+
 ### 局限与下一步
 
 单 prompt/seed（与既有全部数字同口径）；建议多 prompt 复验后定稿。真 kernel 化
