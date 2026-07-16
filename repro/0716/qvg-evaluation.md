@@ -1,60 +1,36 @@
-# QVG 的 Evaluation 体系梳理：指标、benchmark、口径与缺口
+# QVG 的 Evaluation 梳理：质量评测 × Ablation Studies
 
-来源：paper（arXiv:2602.02958 v5，`papers/2602.02958v5.pdf`）+ codebase 考古
-（`repro/0714/details-0714.md`）+ 我们的复现实测（0713-0715）。
+来源：paper（arXiv:2602.02958 v5）+ codebase 考古 + 我们 0713-0715 的复现实测。
+（速度与压缩率的评测口径不在本文档，见 `repro/0714/details-0714.md` §2/§3。）
 
-## 1. 质量指标（Table 1 主表）
+---
 
-三个指标全部是**对参考的保真度**（量化版生成 vs 同 seed 的 BF16 参考视频），
-不是无参考质量评测：
+# 板块一：视频生成质量评测（Quality Assessment）
 
-| 指标 | 含义 | 复现时确认的关键口径 |
-|---|---|---|
-| **PSNR** | 逐像素保真 | **首帧口径**：paper 的数字对应第一张生成帧（LongCat = 全局 frame 93，93 帧共享 init 前缀之后），不是全视频平均——全视频 PSNR 被混沌放大拖到 12-20 dB 且不可复现，这是 0713 复现的核心结论 |
-| **SSIM** | 结构相似度 | 结构性指标可与 paper 对上 |
-| **LPIPS** | 感知距离（VGG 特征） | repo 自带实现 |
+## 1.1 指标体系
 
-此外附录 A.1 用了 **VBench Image Quality**（单维度）做长视频漂移评测（见 §4b）。
+| 指标 | 类型 | 口径 | 复现要点 |
+|---|---|---|---|
+| **PSNR** | 有参考（保真度） | 量化版生成 vs **同 seed 的 BF16 参考视频**，逐像素 | **首帧口径**：paper 数字对应第一张生成帧（LongCat = 全局 frame 93），非全视频平均——全视频 PSNR 被混沌放大拖到 12-20 dB 不可复现（0713 核心结论） |
+| **SSIM** | 有参考 | 同上，结构相似度 | 可与 paper 对上 |
+| **LPIPS** | 有参考 | 同上，VGG 感知距离 | repo 自带实现 |
+| **VBench Image Quality** | **无参考** | VBench 套件中的单一维度（非全套 16 维） | 只在附录 A.1 的长视频实验中使用（表见 §1.3） |
 
-官方实现：`experiments/LongCat/longcat_video/utils/metric.py`——独立 CLI（逐帧
-PSNR + LPIPS(vgg)，tabulate 打表），**不被任何主流程调用**，是手动工具。
-我们的对应物：`repro/backup/scripts/precompute_arrays.py`（多了 SSIM 和逐帧数组落盘）。
+前三者衡量"量化改变了多少"，VBench IQ 衡量"画面本身好不好"——长视频场景参考会漂移，
+无参考指标是必要补充。
 
-## 2. 压缩率（Table 1 第二轴）
+## 1.2 主表协议（Table 1）
 
-Compression Ratio vs BF16。账目**诚实**：残差码 + FP8 scale + uint8 索引 + bf16 质心表
-（质心按 chunk 分摊）全计入（paper Fig 7a 有分解）。我们的公式
-`BPE = r + 8/B + S·8/128 + S·(256·128·16)/(N·128)` 与 README 实测显存逐字节吻合。
-两个小瑕疵（0714 对账）：①Table 1 的 6.94× 隐含 ~35k token 的 chunk，发布配置实际
-29,640 → 6.88×（高报 0.8%）；②附录 Table 5 的 K 扫描漏记 scale 项。
+- **模型**：LongCat-Video 13.6B / HY-WorldPlay 8B / Self-Forcing (Wan) 1.3B，480p
+- **prompt**：MovieGen prompt 套件（经 Self-Forcing 官方设定，paper p.7 脚注）；repo 内 `assets/t2v.txt`
+- **对比配置**：QVG（S=1/B=64/K=256）、QVG-Pro（S=4/B=16）；基线 RTN/KIVI/QuaRot
+  （paper 私有移植——0713 复现：其 QuaRot 21.57 ≈ 我们的**对称**变体 21.42，正确的非对称
+  实现是 30.38，基线被系统性弱化）
+- 同表并报 Compression Ratio（账目诚实，细节见 details-0714 §2.3）
 
-## 3. 速度评测
+## 1.3 VBench 长视频质量（附录 A.1，Table 2）
 
-- **唯一口径 = 端到端生成时间的开销百分比**（§5.3：BF16 与 QVG 各跑一遍完整生成）：
-  LongCat +2.1% / HY-World +1.5% / Self-Forcing +4.3%；k-means 成本计入、每 chunk 压缩一次
-- **唯一绝对秒数**：附录 C Table 6——SF 180 帧、batch 1、H100：端到端 43s、QVG 额外
-  0.74s、开销 1.7%（附录 Table 7 为 batch 1/2/5 扫描）
-- **全文没有任何 kernel 级 benchmark**（无 GB/s、无 TFLOPS、无逐 op 计时）
-- 内部矛盾：SF 的开销 §5.3 说 4.3%、Table 6 说 1.7%、Table 4 按 chunk 1.3-3.3%，未调和
-- 我们按同口径实测**方向反转**：三模型全部负开销（LC −19.9% / SF −5.0% / HY −30%
-  稳态口径），加速来自 KV cache 搬运量缩减（`repro/0714/details-0714.md` §3.5）
-- 换算陷阱：SF 发布脚本 `num_output_frames=180` 实际生成 717 帧（180 latent），
-  是 Table 6 "180 frames" 的 4 倍工作量
-
-## 4. Benchmark 套件与测试设置
-
-| 项 | 设置 |
-|---|---|
-| 模型 | LongCat-Video 13.6B / HY-WorldPlay 8B / Self-Forcing (Wan) 1.3B，均 480p |
-| prompt | MovieGen prompt 套件（经 Self-Forcing 官方设定，paper p.7 脚注）；repo 内 `assets/t2v.txt` |
-| 配置 | QVG（S=1/B=64/K=256）与 QVG-Pro（S=4/B=16）两档；基线 RTN/KIVI/QuaRot（paper 私有移植，疑为对称变体——0713 复现：其 QuaRot 21.57 ≈ 我们的对称版 21.42，而正确非对称版 30.38） |
-| 消融 | chunk 大小（附录 Table 4：6/12/24 帧）、质心数 K（附录 Table 5：64-512）、PRQ 阶段数（Fig 5c 逐阶段 MSE）、720p 质量（Table 3，无计时） |
-| 硬件 | H100 + CUDA 12.8（主）；RTX 5090/4090 侧记 |
-
-### 4b. 附录 A 的两个补充评测（勘误：初版漏掉，pdftotext 对附录页抽取失败所致）
-
-**A.1 长视频 VBench 评测**：SF 延长至 1400 帧（~90s），指标 = **VBench Image Quality**
-（只取这一个维度，非全套 16 维），Table 2：
+SF 延长至 1400 帧（~90s），VBench Image Quality (%)：
 
 | 方法 | 350 帧 | 700 | 1050 | 1400 |
 |---|---:|---:|---:|---:|
@@ -63,37 +39,90 @@ Compression Ratio vs BF16。账目**诚实**：残差码 + FP8 scale + uint8 索
 | QuaRot | 48.33 | 45.17 | 45.58 | 44.45 |
 | **QVG** | **74.36** | **69.52** | **67.23** | **67.28** |
 
-读数：QVG 全程贴 BF16（长时漂移被抑制），KIVI/QuaRot 快速崩坏。注意其 QuaRot 在
-350 帧就只有 48.33（远低于 KIVI）——与 0713 的"paper 私有 QuaRot 疑为弱对称变体"
-发现自洽。
+读数：QVG 全程贴 BF16（长时漂移被有效抑制）；KIVI 随长度崩坏、QuaRot 起点就崩
+（48.33@350 帧——again 弱对称移植的旁证）。
 
-**A.2 分辨率扩展（720p）**：LongCat 720p、质心配置与 480p 完全相同，Table 3：
-QVG 25.99/0.8174/0.1177（PSNR/SSIM/LPIPS）vs QuaRot 20.88、KIVI 17.66。
-不需加质心的机制：QVG 按**定长 token chunk** 聚类——分辨率升高只是每 chunk 覆盖的
-帧数变少，聚类规模不变（无计时数据，720p 只测质量）。
+## 1.4 官方实现与我们的对应工具
 
-**paper 确实没有用的东西**（修正后口径）：VBench 的完整 16 维套件（只用了 Image
-Quality 单维）、FVD、多 seed 方差、多 prompt 统计；repo 里 `--prompt_source
-image_to_video_vbench` 仍是上游遗留死选项（与 A.1 的 VBench 评测无关，那部分代码
-未随 repo 发布）。
+- 官方：`experiments/LongCat/longcat_video/utils/metric.py`——独立 CLI（逐帧 PSNR +
+  LPIPS(vgg)），不被主流程调用；VBench 评测代码未随 repo 发布（`--prompt_source
+  image_to_video_vbench` 是上游 LongCat 的遗留死选项，与 A.1 无关）
+- 我们：`repro/backup/scripts/precompute_arrays.py`（PSNR/SSIM/LPIPS 逐帧数组落盘）+
+  frame-93 首帧协议（`repro/0713/REPRODUCE.md` §3）
 
-## 5. 评测注意事项（我们补出的口径缺口）
+## 1.5 口径缺口与注意事项
 
-1. **首帧 vs 全视频的歧义**：paper 未写明 PSNR 是首帧口径——直接按全视频复现必然对不上。
-2. **单 prompt / 单 seed**：所有质量数字无方差报告；QVG 自身运行间 σ=0.18
-   （k-means 质心初始化无种子，0713 方差研究），Table 1 的 0.1-0.3 dB 级差距在噪声内。
-3. **基线记账偏松**：KIVI 本为非对称（应付 zero-point），paper 按无 zero-point 的
-   6.40× 记账。
-4. **速度测量未说明** warmup 次数、prompt 数、"QVG extra cost" 的统计范围（我们实测
-   同款 cuda-event 计时得 1.32s/chunk，折算比其 0.74s 高 ~6×，无法对齐）。
-5. **B=128 不可测**：发布 kernel 的 autotune bug 使 quant_block_size=128 直接崩
-   （已修，提交 8b81883）——paper 的 B 消融空间受此隐性限制。
-6. **工具教训**：`pdftotext` 对本 PDF 附录页抽取为空——对 PDF 的"全文没有 X"类断言
-   必须用页面渲染（Read 工具）复核，不能只信文本抽取（本文档初版即因此漏掉附录 A）。
+1. **首帧 vs 全视频歧义**：paper 未写明 PSNR 是首帧口径，按全视频复现必然对不上
+2. **单 prompt / 单 seed、无方差**：QVG 运行间 σ=0.18（k-means 质心无种子），Table 1 的
+   0.1-0.3 dB 级差距在噪声内
+3. **基线记账偏松**：KIVI 本为非对称（应付 zero-point 存储），按无 zero-point 记 6.40×
+4. **工具教训**：`pdftotext` 对本 PDF 附录页抽取为空——"全文没有 X"类断言必须用页面
+   渲染复核（本文档初版因此漏掉附录 A）
 
-## 6. 我们复现采用的评测协议（对照）
+---
 
-- 质量：**frame-93 首帧 PSNR** vs `results/longcat/bf16/1-0/segment_1.mp4`（LongCat
-  单段续写，seed 0，prompt_idx 1）；非确定性方法 n=3 报 mean±std
-- 压缩：K/V 合账 BPE（公式见 §2），同预算档位对比
-- 速度：同 GPU 顺序跑、日志内生成计时（墙钟含加载缓存效应，0714 的 HY 教训）
+# 板块二：Ablation Studies
+
+## 2.1 分辨率（附录 A.2：480p → 720p，LongCat，INT2）
+
+| 方法 | PSNR ↑ | SSIM ↑ | LPIPS ↓ |
+|---|---:|---:|---:|
+| KIVI | 17.66 | 0.5518 | 0.3441 |
+| QuaRot | 20.88 | 0.6659 | 0.2395 |
+| **QVG** | **25.99** | **0.8174** | **0.1177** |
+
+**质心配置与 480p 完全相同**（不需要加 K）。机制：QVG 按**定长 token chunk** 聚类——
+分辨率升高只是每帧 token 变多、每 chunk 覆盖帧数变少，聚类规模不变。720p 只测质量、
+无计时。
+
+## 2.2 Chunk 大小（附录 B.1，Table 4，SF INT2）
+
+| Chunk（token） | 帧/chunk | 每层 KV 显存 | 压缩率 | 开销 |
+|---:|---:|---:|---:|---:|
+| 37,440 | 24 | 220 MB | 7.0× | 1.3% |
+| 18,720 | 12 | 230 MB | 6.7× | 2.0% |
+| 9,360 | 6 | 264 MB | 5.8× | 3.3% |
+
+大 chunk 双赢（质心摊薄 + k-means 次数少）；代价是未压缩窗口更大。我们的公式验证：
+37,440 点公式给 6.97 vs 声称 7.0 ✓；9,360 点公式 6.10 vs 声称 5.8（paper 偏保守）。
+
+## 2.3 质心数 K（附录 Table 5，S=1，INT2）
+
+K=64→7.760×、128→7.676×、256→7.539×、512→7.307×。趋势：簇越多质量越好、压缩率越低；
+K=256 恰好是 uint8 索引的上限（超过就要 9-bit 索引）。**记账笔误**（0714 对账）：
+K=256→7.539× 隐含 BPE 2.122，低于"残差+scale"的下界 2.125——该表漏记了 0.125 的 scale 项。
+
+## 2.4 PRQ 阶段数 S（Fig 5c + 我们的解构）
+
+paper 只给逐阶段 MSE 缩减（stage 1 = 5.83×，递减到 ~1.09×）。**我们 0714 b-sweep 的
+解构结论更尖锐**：QVG-Pro（S=4/B=16）对 QVG（S=1/B=64）的 +2.16 dB 里，**S=1→4 只贡献
++0.08 dB**，其余全来自 B=64→16 的细 scale——四轮渐进 k-means 的复杂度几乎白付。
+
+## 2.5 Block size B（paper 没做，我们补的——0714 九宫格）
+
+paper 无 B 消融；部分原因是**发布 kernel 跑不了 B=128**（`quant_pack` autotune bug，
+`tl.arange(0,0)` 崩，我们已修：提交 8b81883）。我们的九宫格（INT2，frame-93）：
+
+| 方法 \ B | 16 | 64 | 128 |
+|---|---:|---:|---:|
+| QVG (S=1) | 30.96 | 28.88 | 28.41 |
+| QuaRot 非对称 | 30.38 | 28.85 | 24.54 |
+| QuaRot 非对称+clip r=0.99 | 30.68 | 29.07 | 25.35 |
+
+读数：QVG 大 B 端有韧性（64→128 仅 −0.47，QuaRot 崩 4.31）——质心把残差削平后对 scale
+粒度不敏感；细节见 `repro/0714/b-sweep.md`。
+
+## 2.6 Batch size（附录 C Table 7，速度侧 ablation）
+
+batch 1/2/5 → 端到端 43/86/217 s，QVG 开销稳定 1.6-1.7%——开销由 chunk 大小决定、
+与 batch/序列长度无关（paper 声称；我们的速度复现见 details-0714 §3.5）。
+
+## 2.7 paper 未覆盖、我们已补的 ablation 汇总
+
+| 维度 | 我们的结论 | 出处 |
+|---|---|---|
+| Block size B | 见 §2.5 九宫格 | 0714/b-sweep.md |
+| 对称 vs 非对称残差网格 | 非对称 4 级 ≫ 三元（+1.8~9 dB，全线成立） | 0713/0714/0715 |
+| 方差（n=3 重复） | 确定性方法 σ≤0.003；QVG σ=0.18（质心无种子） | 0713 方差研究 |
+| clip（旋转后收缩/分位） | r=0.99 小赚，增益随 B 增大 | 0713 qclip + 0714 |
+| 低秩字典 vs k-means 字典 | PCA-KV r=4：31.79 @ BPE 2.253，双超 QVG | 0715/pca-results.md |
