@@ -80,6 +80,16 @@ def _ternary_quant_blocked(x, block):
 def _quant_residual(x):
     if PCA_RES_GRID == "ternary":
         return _ternary_quant_blocked(x, RES_BLOCK)
+    if RES_BLOCK > x.shape[-1]:
+        # flattened grouping across tokens (0715: flattened residual is free)
+        S = x.shape
+        n = x.numel()
+        pad = (RES_BLOCK - n % RES_BLOCK) % RES_BLOCK
+        xf = torch.nn.functional.pad(x.reshape(-1), (0, pad))
+        return _asym_quant_lastdim_grouped(
+            xf.reshape(-1, RES_BLOCK), 2, RES_BLOCK)[: n if pad else None].reshape(S) \
+            if pad else _asym_quant_lastdim_grouped(
+                xf.reshape(-1, RES_BLOCK), 2, RES_BLOCK).reshape(S)
     return _asym_quant_lastdim_grouped(x, 2, RES_BLOCK)
 
 
@@ -438,8 +448,12 @@ def pca_fake_quant_kv(k, v):
             print(f"[pca_quant] N16 cube-mean active: C={PCA_CUBE_C} "
                   f"res_block={RES_BLOCK} v_mode={PCA_V_MODE}", flush=True)
         k_q = _cube_fake_quant(k)
-        v_q = _cube_fake_quant(v) if PCA_V_MODE == "cube" else \
-            pca_fake_quant(v, PCA_R if PCA_V_MODE == "pca" else 0)
+        if PCA_V_MODE == "cube":
+            v_q = _cube_fake_quant(v)
+        elif PCA_V_MODE == "klt":
+            v_q = _klt_fake_quant(v)
+        else:
+            v_q = pca_fake_quant(v, PCA_R if PCA_V_MODE == "pca" else 0)
         return k_q, v_q
     if PCA_K_MODE == "klt":                                          # N13
         if not getattr(pca_fake_quant_kv, "_klt_announced", False):
@@ -541,5 +555,8 @@ def pca_fake_quant_kv(k, v):
         v_q = _unsplit_d(pca_fake_quant(_split_d(v), PCA_R if PCA_V_MODE == "pca" else 0), H, D)
         return k_q, v_q
     k_q = pca_fake_quant(k, PCA_R, fixed_basis=kb)
-    v_q = pca_fake_quant(v, PCA_R if PCA_V_MODE == "pca" else 0)
+    if PCA_V_MODE == "klt":                                          # N17a
+        v_q = _klt_fake_quant(v)
+    else:
+        v_q = pca_fake_quant(v, PCA_R if PCA_V_MODE == "pca" else 0)
     return k_q, v_q
