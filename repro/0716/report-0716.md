@@ -34,6 +34,24 @@ flowchart TB
     I --> J["解码（attention 前）：<br/>X̂ = mu + coef̂·V₄ᵀ + reŝ<br/>一次瘦 GEMM + 逐元素加"]
 ```
 
+**coef 是什么——"报坐标"而非"查字典"（本方案的核心 idea）**：一个 head 的 KV 里，
+每个 token 是 D 维向量，但同一 chunk 内的 token 实际挤在一个低维"板子"附近——
+`eigh` 找出的 V₄ 就是这块板子的 4 根正交坐标轴。`coef[i] = (c₁,c₂,c₃,c₄)` 即第 i 个
+token 在这 4 根轴上的坐标：
+
+```
+token_i ≈ mu + c₁·v₁ + c₂·v₂ + c₃·v₃ + c₄·v₄ + residual_i
+```
+
+原来 128 个数描述的 token，用 **4 个数 + 全 chunk 共享的一套轴**重建出主体，拼不出的
+细节丢给 2-bit 残差。压缩账：coef 每 token 只花 4×2=8 bit（对比残差 256 bit 近乎免费），
+却承载能量最大的成分。与 QVG 的机制对照：**QVG 是"查字典"**——k-means 给每个 token
+找最近质心，token 记一个离散的质心编号；**N4 是"报坐标"**——token 在连续子空间里
+记 4 个连续坐标。字典是离散逼近（需迭代聚类、非确定），坐标是连续逼近（一次闭式
+特征分解、确定性）。一个反直觉的关键发现：**秩越高越差**（r=4>6>8>16）——系数本身
+也要过 2-bit 量化，轴越多每根轴的量化噪声累加越多，r=4 是"抓住大头"与"系数量化
+噪声"之间的最优点（auto-research 扫出，[../0715/pca-results.md](../0715/pca-results.md)）。
+
 **账本**：BPE = 2.253（fake 口径）/ 2.3125（真实现含 zero-point）vs QVG INT2 的 2.326
 ——比特更低。均摊项 = mu + V₄ + 各块 scale/zp。方案由 auto-research 两轮扫出
 （r=4>6>8>16、V 侧 PCA +1.2-1.5 dB、非对称残差 >> ternary +1.8 dB，
