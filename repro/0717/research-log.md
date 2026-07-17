@@ -28,7 +28,7 @@ SF VBench700 QVG=70.41。N4 候选现状：LC 31.79/0.9424/0.067 ✓ / HY 18.15 
 | 0 | N4 基线（r4/coef2/asym/vpca/B128） | LC f93 31.79 / 0.9424 / 0.0670 | LC ✓，HY ✗（18.15），SF ✗（70.26） | 出发点 |
 | 1-2 | ~~N5 α=0.5/1.0 @LC~~ **作废** | 31.79-31.80（≈N4） | 无效读数 | **QW 未激活**：LC 在 prefill 后立即量化条件窗，惰性 hook 错过唯一量化事件 → 静默回退纯 N4（差异是运行噪声）。教训：静默回退必须有 WARNING（已加） |
 | 2b | （bug 修复）HY 首轮三臂崩溃 | — | — | diffusers 按签名过滤 processor kwargs，包装函数吞了 viewmats → 已用 __signature__ 镜像修复 |
-| 3 | N5 α=1.0 pair=interleave @HY | 跑中 | — | GPU0，主臂（HY 侧 QW 会激活：首量化前已有 chunk-1 前向） |
-| 4 | N5 α=0.5 pair=interleave @HY | 跑中 | — | GPU1 |
-| 5 | N5 α=1.0 无配对 @HY | 跑中 | — | GPU2，配对消融 |
-| 6 | N5 @LC 真激活版（init 时包装 q_norm） | 待跑 | — | LC 闸门需重测 |
+| 3 | N5 α=1.0 pair=half @LC（真激活） | LC f93 28.88 / 0.9049 / 0.0932 | **✗ 淘汰** | s 达 54×，过度倾斜毁整体保真——α=1.0 出局 |
+| 4 | **N5 α=0.5 pair=half @LC（真激活）** | **LC f93 31.86 / 0.9417 / 0.0672** | **闸门① ✓**（超 QVG；≈N4，PSNR +0.07） | s 范围 0.31-7.4，温和倾斜；进 HY |
+| 5 | N5 α∈{0.5,1.0}×配对 @HY（rope+prope 平铺修复后） | 跑中 | — | GPU5-7；HY s 范围 0.25-11.8 |
+| 2c | （bug 修复 ×2）HY head_dim 打包 | — | — | ①HY cache head_dim = 模型×2（rope+prope 拼接）→ 重要性平铺；②LC 量化在 prefill 后即刻发生 → q_norm 包装移到 __init__ |
