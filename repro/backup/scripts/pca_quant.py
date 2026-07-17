@@ -55,9 +55,10 @@ def _quant_residual(x):
     return _asym_quant_lastdim_grouped(x, 2, RES_BLOCK)
 
 
-def pca_fake_quant(x, r, fixed_basis=None):
+def pca_fake_quant(x, r, fixed_basis=None, res_bits=None):
     """x: [B, H, S, D] -> fake-quantized same shape/dtype. r=0 -> mean-only.
-    fixed_basis: [H, D, D] ascending eigvecs -> use its top-r instead of chunk eigh."""
+    fixed_basis: [H, D, D] ascending eigvecs -> use its top-r instead of chunk eigh.
+    res_bits: [H, D] integer bits (N6) -> mixed-bit residual, same metadata."""
     prev_tf32 = torch.backends.cuda.matmul.allow_tf32
     torch.backends.cuda.matmul.allow_tf32 = False
     try:
@@ -79,7 +80,11 @@ def pca_fake_quant(x, r, fixed_basis=None):
         else:
             lowrank = torch.zeros_like(Xc)
         res = Xc - lowrank
-        res_hat = _quant_residual(res)
+        if res_bits is not None:
+            bits_bh = res_bits.to(res.device).repeat(B, 1)          # [BH, D]
+            res_hat = _asym_quant_mixedbits(res, bits_bh, RES_BLOCK)
+        else:
+            res_hat = _quant_residual(res)
         out = mu + lowrank + res_hat
         return out.reshape(B, H, S, D).to(x.dtype)
     finally:
@@ -89,6 +94,44 @@ def pca_fake_quant(x, r, fixed_basis=None):
 PCA_SPLIT_D = int(os.environ.get("PCA_SPLIT_D", "0"))  # >0: split D into
 # sub-heads of this width before PCA (e.g. 128 on HY's 256-dim heads so the
 # subspace granularity matches the LC/SF setup). 0 = off.
+
+PCA_QW_MODE = os.environ.get("PCA_QW_MODE", "scale")  # "scale" (N5) | "bits" (N6)
+# N6 "bits": keep the residual's shared per-token min/max scale but reallocate
+# integer bits per dim under the same total budget (2*D), greedily by online
+# Q-energy (Block-GTQ rule: pick argmax w_d * (3/4) * 4^-b). No range
+# stretching (N5's failure mode), no extra metadata, BPE unchanged.
+
+
+def _greedy_bits(w, budget_per_dim=2, bmin=1, bmax=4):
+    """w: [H, D] -> integer bits [H, D], sum per head = budget_per_dim * D."""
+    H, D = w.shape
+    b = torch.full((H, D), bmin, dtype=torch.long, device=w.device)
+    extra = (budget_per_dim - bmin) * D
+    gain = w * (4.0 ** (-bmin))                       # ∝ marginal gain
+    for _ in range(extra):
+        idx = gain.argmax(dim=-1)                     # [H]
+        rows = torch.arange(H, device=w.device)
+        b[rows, idx] += 1
+        gain[rows, idx] = torch.where(
+            b[rows, idx] >= bmax, torch.zeros_like(idx, dtype=w.dtype),
+            w[rows, idx] * (4.0 ** (-b[rows, idx].float())))
+    return b
+
+
+def _asym_quant_mixedbits(x, bits, group):
+    """x: [BH, S, D]; bits: [BH, D] integer per-dim bit widths. Shared per-
+    (token, group) min/max exactly like the uniform quantizer (same metadata),
+    only the per-dim level count varies."""
+    BH, S, D = x.shape
+    xg = x.reshape(BH, S, D // group, group)
+    bg = bits.reshape(BH, 1, D // group, group).float()
+    mn = xg.amin(dim=-1, keepdim=True)
+    mx = xg.amax(dim=-1, keepdim=True)
+    rng = (mx - mn).clamp_min(1e-8)
+    levels = (2.0 ** bg - 1).clamp_min(1.0)
+    q = torch.clamp(torch.round((xg - mn) / rng * levels), torch.zeros_like(levels), levels)
+    return (q / levels * rng + mn).reshape(BH, S, D)
+
 
 # ---- N5: online Q-energy-weighted K quantization (OSCAR idea, online) ----
 # PCA_QW_ALPHA > 0 enables it. The launcher captures per-(layer, head, dim)
@@ -154,17 +197,31 @@ def pca_fake_quant_kv(k, v):
                   "(no q-stats yet) — falling back to plain N4 for this event", flush=True)
         if w is not None:
             assert _K_BASIS is None and not PCA_SPLIT_D, "QW mode is exclusive"
-            s = _qw_scale(w.to(k.device, torch.float32))       # native [H, D]
             H, D = k.shape[1], k.shape[-1]
-            if s.shape != (H, D):
-                if s.shape[0] == H and D % s.shape[1] == 0:
-                    # HY cache stores rope+prope K/V variants concatenated
-                    # (head_dim = model head_dim * 2); both halves map to the
-                    # same underlying dims -> tile the importance scale.
-                    s = s.repeat(1, D // s.shape[1])
-                else:
-                    assert s.numel() == H * D, f"q-stats {tuple(s.shape)} vs k {H}x{D}"
-                    s = s.reshape(H, D)
+
+            def to_k_layout(t):
+                if t.shape == (H, D):
+                    return t
+                if t.shape[0] == H and D % t.shape[1] == 0:
+                    # HY cache packs rope+prope K/V variants (head_dim = 2x);
+                    # both halves map to the same underlying dims -> tile.
+                    return t.repeat(1, D // t.shape[1])
+                assert t.numel() == H * D, f"q-stats {tuple(t.shape)} vs k {H}x{D}"
+                return t.reshape(H, D)
+
+            if PCA_QW_MODE == "bits":                       # N6
+                wn = _qw_pair_avg(w.to(k.device, torch.float32))
+                bits = to_k_layout(_greedy_bits(wn))
+                if not getattr(pca_fake_quant_kv, "_qw_announced", False):
+                    pca_fake_quant_kv._qw_announced = True
+                    hist = torch.bincount(bits.flatten(), minlength=5).tolist()
+                    print(f"[pca_quant] QW-N6 bits active: pair={PCA_QW_PAIR or 'none'} "
+                          f"bits histogram(0-4)={hist} mean={bits.float().mean():.3f}", flush=True)
+                k_q = pca_fake_quant(k, PCA_R, res_bits=bits)
+                v_q = pca_fake_quant(v, PCA_R if PCA_V_MODE == "pca" else 0)
+                return k_q, v_q
+
+            s = to_k_layout(_qw_scale(w.to(k.device, torch.float32)))   # N5
             if not getattr(pca_fake_quant_kv, "_qw_announced", False):
                 pca_fake_quant_kv._qw_announced = True
                 print(f"[pca_quant] QW active: alpha={PCA_QW_ALPHA} pair={PCA_QW_PAIR or 'none'} "
