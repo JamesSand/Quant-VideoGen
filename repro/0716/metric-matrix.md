@@ -16,7 +16,7 @@
 | 格 | 协议 | 依据 |
 |---|---|---|
 | LC（INT2/INT4） | 首个生成帧 frame 93 | [0713 report](../0713/report-0713.md)，13/13 match 验证；paper 版 SSIM 下 QVG f93 = 28.73/0.9033 vs paper 28.716/0.909 **双指标精确 match** |
-| HY（INT2/INT4） | **两段协议（用户 0717 定稿）：drop 前 [1,断崖) 与 drop 后 [断崖,末) 分别报三指标 + 断崖帧位置**（断崖=首个 PSNR<28 帧；~~[23,36)~~ 跨崖窗口、~~[0,32)~~ 起点窗口均作废） | [hy-ref-metrics.md](hy-ref-metrics.md)：HY 是平台+断崖结构；INT4 drop 前与 paper 三指标精确吻合，INT2 的 paper 值为跨崖均值形状 |
+| HY（INT2/INT4） | **全部生成视频的逐帧均值**（用户 0717 晚间再定稿，取代两段协议；两段读数降级为诊断视图） | [../0717/eval-protocol.md](../0717/eval-protocol.md)（唯一权威版）；机制诊断见 [hy-ref-metrics.md](hy-ref-metrics.md) |
 
 **SSIM 一律 paper 实现（metric.py 的 11×11 avg_pool 局部窗）**——`sf_ref_metrics.py`
 曾用的全局 SSIM 严重虚高已废（0716 勘误，脚本已修）；受影响 npz 用 `ssim_paper` 键。
