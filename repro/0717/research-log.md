@@ -58,6 +58,9 @@ SF VBench700 QVG=70.41。N4 候选现状：LC 31.79/0.9424/0.067 ✓ / HY 18.15 
 | 37 | （考察）HY prope 路径 | — | — | prope_qkv 对 **V 也做相机相关变换**（apply_fn_kv 作用 k,v；输出端 apply_fn_o）——HY 的 K、V 都无固定读取度量，固定度量类方法（含 N20）在 HY 结构性受限 |
 | 38 | HY sink 臂（r3+S0=64 BF16 sink，OSCAR 同款、BPE 2.322✓）；SF ternary B64 臂（QVG 同款格、BPE 2.26✓） | 跑中 | — | 第 15 族：文献标准 sink 保护 |
 
+| 39 | HY sink（r3+S0=64） | 18.102 ✗ | 第 15 族证伪 | 64-token sink 太小（图像 latent 有 880 token），r3 还倒贴 |
+| 40 | **SF × ternary B64（QVG 同款格，2-bit 记账完全对称，BPE 2.26）** | **VBench700 = 71.61 ✓✓（超靶 70.41 +1.2，hijack=1）** | **闸门③ ✓（公平记账版）** | SF 的 VBench 偏好三值细 scale 格；LC 的 ternary 版本（0715 数据 ≈30）也应过 QVG 线——统一格方法"PCA-r4+ternary-B64"可覆盖 LC+SF，**唯 HY 仍缺 PSNR 0.6 dB** |
+
 **当前全局（公平记账、全部约束下）**：无候选同时过三关。N4：LC✓ HY✗(18.15/18.77) SF✗(70.26/70.41)；
 N20：LC✓✓(32.91) HY✗ SF✗。已证伪 12+ 机制族。HY 剩余线索=prope 路径独立度量；
 SF 剩余线索=V 单侧 r5（BPE 2.320✓）等微杠杆。
