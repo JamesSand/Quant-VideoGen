@@ -13,7 +13,7 @@ _ctr = [0]
 
 def _patched(k, v, quant_type, quant_config, quantize_fn):
     i = _ctr[0]; _ctr[0] += 1
-    if (i % 30) in (0, 15, 25) and i < 90:
+    if (i % int(os.environ.get("KV_DUMP_L", "30"))) in (0, 15, 25) and i < 90:
         torch.save({"k": k.detach().to(torch.bfloat16).cpu(),
                     "v": v.detach().to(torch.bfloat16).cpu()},
                    f"{OUT}/call_{i:03d}.pt")

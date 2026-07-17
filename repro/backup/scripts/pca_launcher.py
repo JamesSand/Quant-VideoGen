@@ -255,5 +255,48 @@ if os.environ.get("PCA_TW", "0") == "1":
         print("[pca_launcher] PCA_TW set but target has no pose signal — "
               "method degenerates to plain N4 (by design)", flush=True)
 
+# ---- N20: W_O-metric V provider (LC) ----
+if os.environ.get("PCA_V_METRIC", "") == "wo":
+    _tgt_vw = os.environ.get("PCA_TARGET", "")
+    if "LongCat" in _tgt_vw:
+        import torch as _t3
+        from longcat_video.modules import attention as _latt2
+
+        _vw_mods = []
+        _vw_cache = {}
+        _orig_init_vw = _latt2.Attention.__init__
+
+        def _init_vw(self, *a, **kw):
+            _orig_init_vw(self, *a, **kw)
+            _vw_mods.append(self)
+
+        _latt2.Attention.__init__ = _init_vw
+
+        def _vw_provider(call_idx):
+            if not _vw_mods:
+                return None
+            layer = call_idx % len(_vw_mods)
+            if layer not in _vw_cache:
+                mod = _vw_mods[layer]
+                with _t3.no_grad():
+                    Wt = mod.proj.weight.detach().float()      # [dim, dim]
+                    H = mod.num_heads
+                    D = mod.head_dim
+                    Ws, Wis = [], []
+                    for h in range(H):
+                        blk = Wt[:, h * D:(h + 1) * D]
+                        G = blk.t() @ blk
+                        G = G + 1e-3 * G.diagonal().mean() * _t3.eye(D, device=G.device)
+                        lam, U = _t3.linalg.eigh(G)
+                        Ws.append(U @ _t3.diag(lam.clamp_min(1e-8).sqrt()) @ U.t())
+                        Wis.append(U @ _t3.diag(1.0 / lam.clamp_min(1e-8).sqrt()) @ U.t())
+                    _vw_cache[layer] = (_t3.stack(Ws), _t3.stack(Wis))
+            return _vw_cache[layer]
+
+        _pq.set_vw_provider(_vw_provider)
+        print("[pca_launcher] N20 W_O-metric V provider enabled (LongCat)", flush=True)
+    else:
+        print("[pca_launcher] PCA_V_METRIC=wo: no provider for this target", flush=True)
+
 _target = os.environ.get("PCA_TARGET", "experiments/LongCat/run_long_t2v.py")
 runpy.run_path(_target, run_name="__main__")

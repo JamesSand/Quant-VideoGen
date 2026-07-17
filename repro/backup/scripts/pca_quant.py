@@ -213,6 +213,17 @@ PCA_QW_ALPHA = float(os.environ.get("PCA_QW_ALPHA", "0"))
 _QW_PROVIDER = [None]   # fn(call_idx) -> [H, D] mean q^2 (any device) or None
 _QW_CTR = [0]
 
+# ---- Q2: W_O-metric V shaping. The true V error metric is ||W_O dV||, not
+# ||dV||: whiten V by G^{1/2} (G = per-head Gram of the output projection
+# block, a MODEL WEIGHT — decoder-reproducible, zero storage), run the N4
+# pipeline in whitened space, unwhiten on decode.
+PCA_V_METRIC = os.environ.get("PCA_V_METRIC", "")      # "" | "wo"
+_VW_PROVIDER = [None]   # fn(call_idx) -> (W [H,D,D], Winv [H,D,D]) or None
+
+
+def set_vw_provider(fn):
+    _VW_PROVIDER[0] = fn
+
 # ---- N7: temporal (per-frame) bit reallocation by future-retrieval prob ----
 # The launcher computes, at each quantize event, per-token integer bits from
 # the FOV overlap of the quantized frames' cameras with all FUTURE planned
@@ -588,6 +599,19 @@ def pca_fake_quant_kv(k, v):
     k_q = pca_fake_quant(k, PCA_R, fixed_basis=kb)
     if PCA_V_MODE == "klt":                                          # N17a
         v_q = _klt_fake_quant(v)
+    elif PCA_V_METRIC == "wo" and _VW_PROVIDER[0] is not None:       # N20
+        wpair = _VW_PROVIDER[0](call_idx)
+        if wpair is None:
+            v_q = pca_fake_quant(v, PCA_R if PCA_V_MODE == "pca" else 0)
+        else:
+            W, Winv = wpair
+            if not getattr(pca_fake_quant_kv, "_vw_announced", False):
+                pca_fake_quant_kv._vw_announced = True
+                print(f"[pca_quant] N20 V<-W_O metric active W{tuple(W.shape)}", flush=True)
+            vw = torch.einsum("bhsd,hde->bhse", v.float(), W.to(v.device))
+            vq = pca_fake_quant(vw, PCA_R if PCA_V_MODE == "pca" else 0)
+            v_q = torch.einsum("bhsd,hde->bhse", vq.float(),
+                               Winv.to(v.device)).to(v.dtype)
     else:
         v_q = pca_fake_quant(v, PCA_R if PCA_V_MODE == "pca" else 0)
     return k_q, v_q
