@@ -39,8 +39,17 @@
      **贪心取重叠最大的块**直至配额满——赢者通吃，选中的老帧按相对位置重新
      排位（相对 RoPE 现算 + prope 按当前相机变换）。
 
-**含义**：量化误差的激活是**事件性**的（回访/检索命中时），这是断崖机制与
-"锚点内容最热"结论的结构根源；同一 key 多次被以不同旋转读取 = 无固定读取坐标系。
+**⚠️ 0717 修正——阶段 2 在我们的评测中从未执行**：paper 协议 run 传
+`--memory_frames 48` = 全部 48 latent（pod_run_paperspeed.sh#L65），触发条件
+`current_frame_idx ≥ context_window_length(=48)` 永不满足；且 QVG fork 的连续性
+assert（[pipeline#L1076-L1081](../../experiments/HY-WorldPlay/wan/inference/pipeline_wan_w_mem_relative_rope.py#L1076-L1081)）
+禁止非前缀选择——检索若真执行会当场崩溃。as-evaluated 的 HY = 全历史前缀直读，
+cache 存 post-rope‖post-prope、追加写入、读取不重转（[processor#L165-L185](../../experiments/HY-WorldPlay/wan/models/dits/arwan_w_action_w_mem_relative_rope.py#L165-L185)），
+**位置写入时定死** = 固定读取坐标系。阶段 2 描述保留为上游设计意图（真部署
+检索配置下才生效）。详见 [rope-coordinate-finding.md](rope-coordinate-finding.md) §二/§三。
+
+**含义**：量化误差的激活在评测配置下是持续直读式的（断崖 f29 发生于全历史
+直读阶段）；"事件性检索激活"属于未评测的设计意图配置。
 
 ## 三、Self-Forcing（纯近期滚动窗 + 可选 sink）
 
@@ -66,5 +75,5 @@ chunk（24 latent = 37440 token）老化后量化。
 | 读取模式 | 条件窗全量常驻 | 全历史（<16 latent）→ 近期窗+FOV 检索 4 帧（≥16） | 近期滑窗（21 latent）或全历史 |
 | 检索/选择性 | 无 | **有（FOV 赢者通吃）** | 无（可选 sink） |
 | 量化误差激活 | 首生成帧即全额 | 事件性（回访/检索） | 持续均匀 |
-| 位置语义 | 段内固定（cache 段内生死） | 相对 RoPE + 检索重排 + prope 相机变换（动态） | **绝对位置写入时施加，滑窗只截断**（固定） |
+| 位置语义 | 段内固定（cache 段内生死） | **固定（0717 修正）**：post-rope/prope 写入时定死、追加读取不重转；检索重排仅为未评测的设计意图 | **绝对位置写入时施加，滑窗只截断**（固定） |
 | 对应评测协议 | frame-93 | 全程均值（断崖支配） | VBench（无参考） |
