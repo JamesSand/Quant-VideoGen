@@ -154,7 +154,13 @@ def pca_fake_quant_kv(k, v):
                   "(no q-stats yet) — falling back to plain N4 for this event", flush=True)
         if w is not None:
             assert _K_BASIS is None and not PCA_SPLIT_D, "QW mode is exclusive"
-            s = _qw_scale(w.to(k.device, torch.float32))       # [H, D]
+            s = _qw_scale(w.to(k.device, torch.float32))       # native [H, D]
+            H, D = k.shape[1], k.shape[-1]
+            if s.shape != (H, D):
+                # cache/compress may view heads packed (e.g. HY: model 48x128,
+                # cache 24x256) — scale computed per native head, then re-viewed
+                assert s.numel() == H * D, f"q-stats {tuple(s.shape)} vs k {H}x{D}"
+                s = s.reshape(H, D)
             if not getattr(pca_fake_quant_kv, "_qw_announced", False):
                 pca_fake_quant_kv._qw_announced = True
                 print(f"[pca_quant] QW active: alpha={PCA_QW_ALPHA} pair={PCA_QW_PAIR or 'none'} "
