@@ -615,17 +615,27 @@ def pca_fake_quant_kv(k, v):
                 v_q = torch.einsum("bhsd,hde->bhse", vq.float(),
                                    Winv.to(v.device)).to(v.dtype)
             else:
-                # HY packs [v_rope; v_prope] (2d wide): whiten each half with
-                # the same per-head W (both halves feed the same to_out block)
+                # HY packs [v_rope; v_prope] (2d wide). PCA_VW_HALF=1: whiten
+                # only the first (rope) half — the prope variant may not feed
+                # the same to_out path. Default: whiten both with same W.
                 B, H, S, D = v.shape
                 n = D // d
+                half_only = os.environ.get("PCA_VW_HALF", "0") == "1"
                 vv = v.float().reshape(B, H, S, n, d)
-                vw = torch.einsum("bhsnd,hde->bhsne", vv, W.to(v.device))
+                if half_only:
+                    vw = vv.clone()
+                    vw[..., 0, :] = torch.einsum("bhsd,hde->bhse", vv[..., 0, :], W.to(v.device))
+                else:
+                    vw = torch.einsum("bhsnd,hde->bhsne", vv, W.to(v.device))
                 vq = pca_fake_quant(vw.reshape(B, H, S, D),
                                     PCA_R if PCA_V_MODE == "pca" else 0)
-                vq = torch.einsum("bhsnd,hde->bhsne",
-                                  vq.float().reshape(B, H, S, n, d),
-                                  Winv.to(v.device))
+                vq = vq.float().reshape(B, H, S, n, d)
+                if half_only:
+                    out = vq.clone()
+                    out[..., 0, :] = torch.einsum("bhsd,hde->bhse", vq[..., 0, :], Winv.to(v.device))
+                    vq = out
+                else:
+                    vq = torch.einsum("bhsnd,hde->bhsne", vq, Winv.to(v.device))
                 v_q = vq.reshape(B, H, S, D).to(v.dtype)
     else:
         v_q = pca_fake_quant(v, PCA_R if PCA_V_MODE == "pca" else 0)
