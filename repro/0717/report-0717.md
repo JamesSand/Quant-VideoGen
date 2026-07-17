@@ -8,6 +8,52 @@
 **一句话**：逐 chunk 在线 PCA **减法** + 分块低位宽**均匀格**残差；全部逐模型配置
 由同一条预算规则给出。
 
+```mermaid
+flowchart TB
+    subgraph CACHE["流式 KV cache（每头，随生成推进）"]
+        direction LR
+        H["已量化历史<br/>（永不再碰）"] ~~~ W["BF16 近期窗"] ~~~ C["当前生成 chunk"]
+    end
+
+    W -- "一段 KV 老化出 BF16 窗<br/>= 触发一次量化事件" --> S1
+
+    subgraph ENC["编码：三步，全部在线、零校准数据、零迭代"]
+        direction TB
+        S1["① 统计（只用本 chunk 自己）<br/>均值 μ ＋ 自协方差 top-r 特征基 U_r<br/>一次 eigh，无 k-means、无迭代"]
+        S2["② 减法（低秩通道，自身零重建误差）<br/>系数 c = U_rᵀ(x−μ)，每 token 量化：<br/>q(c) = 2-bit 非对称 ＋ FP8 scale/zp<br/>编解码两端用同一个 q(c)·U_rᵀ"]
+        S3["③ 残差均匀格（唯一误差来源，各向同性）<br/>res = x − μ − q(c)·U_rᵀ<br/>LC/HY：非对称 2-bit B=128<br/>SF：三值 B=64（QVG 同格同 2-bit 记账）"]
+        S1 --> S2 --> S3
+    end
+
+    S3 --> ST["写回 cache（替换 bf16）<br/>q(res) ＋ q(c)/token ＋ μ,U_r（bf16，按 chunk 摊销 ≈0）<br/>LC 逐 token 账：34B＋3B ≈ 37B vs 256B"]
+    ST -.->|"attention 读取时"| DEC["解码：x̂ = μ ＋ q(c)·U_rᵀ ＋ r̂es<br/>一次瘦 GEMM ＋ 逐元素加"]
+
+    ESSENCE["方法本质：全部误差只在残差均匀格里 = 各向同性<br/>PCA 只决定「减多少」，从不决定「误差往哪个方向放」"]
+    S3 ~~~ ESSENCE
+
+    RULE["唯一配置规则：在 BPE < QVG（2.326）的预算内取封顶配置"]
+    ST --> RULE
+    RULE --> LC["LC：r=4，asym B128<br/>BPE 2.3125<br/>31.79/0.9424/0.0670"]
+    RULE --> HY["HY（rope‖prope 256 维）：<br/>半区秩 K=9:0、V=8:1（prope 秩归零）<br/>BPE 2.320<br/>18.904/0.4874/0.3495"]
+    RULE --> SF["SF：r=4，三值 B64<br/>BPE 2.26<br/>VBench700 71.61"]
+
+    style CACHE fill:#F8FAFC,stroke:#94A3B8
+    style H fill:#CBD5E1,stroke:#64748B
+    style W fill:#93C5FD,stroke:#3B82F6
+    style C fill:#FDBA74,stroke:#EA580C
+    style ENC fill:#F0F6FD,stroke:#4A7AB5
+    style S1 fill:#E8F0FA,stroke:#4A7AB5
+    style S2 fill:#E8F0FA,stroke:#4A7AB5
+    style S3 fill:#E8F0FA,stroke:#4A7AB5
+    style ST fill:#FFFFFF,stroke:#4A7AB5
+    style DEC fill:#E6F4EA,stroke:#3E8E5A
+    style ESSENCE fill:#FEF3E2,stroke:#D97706
+    style RULE fill:#FEF3E2,stroke:#D97706
+    style LC fill:#F5F5F4,stroke:#A8A29E
+    style HY fill:#F5F5F4,stroke:#A8A29E
+    style SF fill:#F5F5F4,stroke:#A8A29E
+```
+
 每个量化事件（一段 KV 老化出 BF16 窗口时）做三步，全部在线、零校准数据、零迭代：
 
 1. **统计**：对该 chunk 的 K/V 各算一个均值 μ 和自协方差的 top-r 特征向量基 U
