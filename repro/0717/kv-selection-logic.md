@@ -8,12 +8,12 @@
 
 **结构**：视频续写任务——固定 73 帧条件窗 → 每段生成 20 新帧 → 窗口滑动进入下一段。
 
-**选取逻辑**（`pipeline_longcat_video.py:1180-1200`）：
-1. 段开始：对 73 帧条件窗做 prefill 得到其 KV（`_cache_clean_latents`），
-   **随即整窗量化**（`quantize_kv_cache`，唯一一次量化事件）；
+**选取逻辑**（[pipeline_longcat_video.py#L1180-L1200](../../experiments/LongCat/longcat_video/pipeline_longcat_video.py#L1180-L1200)）：
+1. 段开始：对 73 帧条件窗做 prefill 得到其 KV（[`_cache_clean_latents`](../../experiments/LongCat/longcat_video/pipeline_longcat_video.py#L1184-L1192)），
+   **随即整窗量化**（[`quantize_kv_cache`](../../experiments/LongCat/longcat_video/modules/longcat_video_dit.py#L541-L580)，唯一一次量化事件）；
 2. 段内 denoising 的每一步：新 20 帧的 query 读取 **整个量化后的条件窗 KV +
    本段自身 token**（段内全注意力，无因果掩码筛选、无检索——条件窗全量常驻）；
-3. 下一段：窗口滑动重新锚定，重复 1-2（`rope_3d` 按当前 grid 现算位置）。
+3. 下一段：窗口滑动重新锚定，重复 1-2（[`rope_3d`](../../experiments/LongCat/longcat_video/modules/rope_3d.py#L115-L143) 按当前 grid 现算位置，读取点在 [attention.py#L187](../../experiments/LongCat/longcat_video/modules/attention.py#L187)）。
 
 **含义**：条件窗 = 100% 被读的"全热"内容 → 量化误差从第一个生成帧就全额激活
 → **frame-93（首个生成帧）协议**恰好测到纯净的误差注入点；不存在检索选择性，
@@ -24,19 +24,18 @@
 **结构**：I2V 世界模型，逐 chunk（4 latent = 16 帧）自回归；KV cache 按帧对齐
 写入，老化出近期窗后量化（8-latent 跨度事件）。
 
-**选取逻辑**（`pipeline_wan_w_mem_relative_rope.py:1055-1075`）——两个阶段：
+**选取逻辑**（[pipeline_wan_w_mem_relative_rope.py#L1055-L1075](../../experiments/HY-WorldPlay/wan/inference/pipeline_wan_w_mem_relative_rope.py#L1055-L1075)）——两个阶段：
 
-1. **早期（current_frame_idx < context_window_length，默认 16 latent）**：
-   `selected_frame_indices = range(0, current_frame_idx)` —— **全历史直读**：
+1. **早期（current_frame_idx < context_window_length，[默认 16 latent](../../experiments/HY-WorldPlay/wan/generate.py#L201)）**：
+   [`selected_frame_indices = range(0, current_frame_idx)`](../../experiments/HY-WorldPlay/wan/inference/pipeline_wan_w_mem_relative_rope.py#L1073-L1075) —— **全历史直读**：
    新 chunk 的 query 读取此前所有帧的 KV（近期帧 BF16 + 老化帧已量化）。
    我们 189 帧 run 的断崖（f29 ≈ latent 7-8，chunk 2-3）**发生在这个阶段**：
    回访时刻模型直读全部量化历史，无检索过滤；
-2. **后期（≥16 latent）**：`select_mem_frames_wan`（`wan/models/utils.py:90-143`）
+2. **后期（≥16 latent）**：[`select_mem_frames_wan`](../../experiments/HY-WorldPlay/wan/models/utils.py#L88-L145)
    —— **近期窗 + FOV 检索**：
    - 近期窗：最近 temporal_context_size（44 像素帧）恒在；
    - 记忆配额：memory_frames − temporal_context = **4 帧**（1 个 4 帧块）；
-   - 检索：历史每 4 帧一个候选块，用相机 **FOV 重叠度**（`calculate_fov_overlap
-     _similarity`，60°×35° 视锥 Monte-Carlo）对当前 chunk 的 query 帧打分，
+   - 检索：历史每 4 帧一个候选块，用相机 **FOV 重叠度**（[`calculate_fov_overlap_similarity`](../../experiments/HY-WorldPlay/hyvideo/utils/retrieval_context.py#L139-L160)，60°×35° 视锥 Monte-Carlo）对当前 chunk 的 query 帧打分，
      **贪心取重叠最大的块**直至配额满——赢者通吃，选中的老帧按相对位置重新
      排位（相对 RoPE 现算 + prope 按当前相机变换）。
 
@@ -48,11 +47,10 @@
 **结构**：T2V，逐 block（3 latent = 12 帧）因果自回归；KV cache 追加式写入，
 chunk（24 latent = 37440 token）老化后量化。
 
-**选取逻辑**（`wan/modules/causal_model.py:118-262`）：
-1. 注意力尺寸：`max_attention_size = 32760 token（=21 latent） if local_attn_size==-1
-   else local_attn_size×1560`——新 block 的 query 读取
-   `kv_cache[k][max(0, end − max_attention_size) : end]`，**纯近期滑窗、无检索**；
-2. 可选 `sink_size`：保留开头 sink_size 帧恒在窗内（默认 0；这是 KVSink 式
+**选取逻辑**（[causal_model.py#L113-L262](../../experiments/Self-Forcing/wan/modules/causal_model.py#L113-L262)）：
+1. 注意力尺寸：[`max_attention_size = 32760 token（=21 latent） if local_attn_size==-1 else local_attn_size×1560`](../../experiments/Self-Forcing/wan/modules/causal_model.py#L131)——新 block 的 query 读取
+   [`kv_cache[k][max(0, end − max_attention_size) : end]`](../../experiments/Self-Forcing/wan/modules/causal_model.py#L262)，**纯近期滑窗、无检索**；
+2. 可选 [`sink_size`](../../experiments/Self-Forcing/wan/modules/causal_model.py#L229)：保留开头 sink_size 帧恒在窗内（默认 0；这是 KVSink 式
    sink 机制的原生接口）；
 3. 我们的评测 run 用 `--local_attn_size 195` = 全历史注意力（发布代码的滑窗
    路径在 pre-RoPE 分支不可用，见 0716 上游问题清单）。
