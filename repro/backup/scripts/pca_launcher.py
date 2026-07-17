@@ -195,5 +195,65 @@ if _pq.PCA_QW_ALPHA > 0:
         print("[pca_launcher] WARNING: PCA_QW_ALPHA set but no q-capture "
               f"path for target {_tgt_for_qw}; QW inactive", flush=True)
 
+# ---- N7: temporal bit reallocation by future-retrieval probability (HY) ----
+if os.environ.get("PCA_TW", "0") == "1":
+    _tgt_tw = os.environ.get("PCA_TARGET", "")
+    if "HY-WorldPlay" in _tgt_tw:
+        import numpy as _np
+        import torch as _t2
+        import hyvideo.generate as _hg
+        from hyvideo.utils.retrieval_context import (
+            calculate_fov_overlap_similarity as _fov)
+        import wan.inference.pipeline_wan_w_mem_relative_rope as _pp
+
+        _traj = {}
+        _orig_p2i = _hg.pose_to_input
+
+        def _p2i(*a, **kw):
+            out = _orig_p2i(*a, **kw)
+            _traj["vm"] = _np.asarray(out[0].cpu().numpy(), dtype=_np.float64)
+            return out
+
+        _hg.pose_to_input = _p2i
+
+        _TPF = 880
+        _TW_TEMPER = float(os.environ.get("PCA_TW_TEMPER", "1.0"))
+        _orig_qkv = _pp.WanPipeline.quantize_kv_cache
+
+        def _qkv(self, s, e):
+            try:
+                vm = _traj.get("vm")
+                if vm is not None:
+                    fs, fe = s // _TPF, e // _TPF
+                    fut = list(range(fe, vm.shape[0], 2))
+                    if fut and fe > fs:
+                        w = _np.zeros(fe - fs)
+                        for i, f in enumerate(range(fs, fe)):
+                            w[i] = _np.mean([
+                                _fov(vm[q], vm[f], fov_h_deg=60.0, fov_v_deg=35.0,
+                                     device="cuda",
+                                     points_local=getattr(self, "points_local", None))
+                                for q in fut])
+                        ww = _t2.tensor(w).clamp_min(1e-6) ** _TW_TEMPER
+                        bits_f = _pq._greedy_bits(ww[None, :], budget_per_dim=2,
+                                                  bmin=1, bmax=4)[0]
+                        _pq.set_tw_bits(bits_f.repeat_interleave(_TPF))
+                        print(f"[pca_launcher] N7 frames[{fs},{fe}) bits="
+                              f"{bits_f.tolist()} w={['%.3f' % x for x in w]}",
+                              flush=True)
+            except Exception as ex:
+                print(f"[pca_launcher] N7 TW failed: {ex}", flush=True)
+            try:
+                return _orig_qkv(self, s, e)
+            finally:
+                _pq.set_tw_bits(None)
+
+        _pp.WanPipeline.quantize_kv_cache = _qkv
+        print(f"[pca_launcher] N7 temporal bits enabled (temper={_TW_TEMPER})",
+              flush=True)
+    else:
+        print("[pca_launcher] PCA_TW set but target has no pose signal — "
+              "method degenerates to plain N4 (by design)", flush=True)
+
 _target = os.environ.get("PCA_TARGET", "experiments/LongCat/run_long_t2v.py")
 runpy.run_path(_target, run_name="__main__")

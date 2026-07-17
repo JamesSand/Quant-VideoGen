@@ -55,10 +55,11 @@ def _quant_residual(x):
     return _asym_quant_lastdim_grouped(x, 2, RES_BLOCK)
 
 
-def pca_fake_quant(x, r, fixed_basis=None, res_bits=None):
+def pca_fake_quant(x, r, fixed_basis=None, res_bits=None, res_bits_t=None):
     """x: [B, H, S, D] -> fake-quantized same shape/dtype. r=0 -> mean-only.
     fixed_basis: [H, D, D] ascending eigvecs -> use its top-r instead of chunk eigh.
-    res_bits: [H, D] integer bits (N6) -> mixed-bit residual, same metadata."""
+    res_bits: [H, D] integer bits (N6) -> per-dim mixed-bit residual.
+    res_bits_t: [S] integer bits (N7) -> per-token mixed-bit residual."""
     prev_tf32 = torch.backends.cuda.matmul.allow_tf32
     torch.backends.cuda.matmul.allow_tf32 = False
     try:
@@ -83,6 +84,8 @@ def pca_fake_quant(x, r, fixed_basis=None, res_bits=None):
         if res_bits is not None:
             bits_bh = res_bits.to(res.device).repeat(B, 1)          # [BH, D]
             res_hat = _asym_quant_mixedbits(res, bits_bh, RES_BLOCK)
+        elif res_bits_t is not None:
+            res_hat = _asym_quant_tokenbits(res, res_bits_t, RES_BLOCK)
         else:
             res_hat = _quant_residual(res)
         out = mu + lowrank + res_hat
@@ -145,6 +148,31 @@ PCA_QW_ALPHA = float(os.environ.get("PCA_QW_ALPHA", "0"))
 _QW_PROVIDER = [None]   # fn(call_idx) -> [H, D] mean q^2 (any device) or None
 _QW_CTR = [0]
 
+# ---- N7: temporal (per-frame) bit reallocation by future-retrieval prob ----
+# The launcher computes, at each quantize event, per-token integer bits from
+# the FOV overlap of the quantized frames' cameras with all FUTURE planned
+# cameras (the action script is known upfront). Same shared scale metadata,
+# budget mean = 2 bits — BPE unchanged. Applied to BOTH K and V residuals
+# (revisit retrieval reads both). Models without a pose signal degenerate to
+# plain N4 by construction.
+_TW_BITS = [None]
+
+
+def set_tw_bits(bits_t):
+    _TW_BITS[0] = bits_t
+
+
+def _asym_quant_tokenbits(x, bits_t, group):
+    """x: [BH, S, D]; bits_t: [S] integer bit widths per token."""
+    BH, S, D = x.shape
+    xg = x.reshape(BH, S, D // group, group)
+    lv = (2.0 ** bits_t.to(x.device).float().view(1, S, 1, 1) - 1).clamp_min(1.0)
+    mn = xg.amin(dim=-1, keepdim=True)
+    mx = xg.amax(dim=-1, keepdim=True)
+    rng = (mx - mn).clamp_min(1e-8)
+    q = torch.clamp(torch.round((xg - mn) / rng * lv), torch.zeros_like(lv), lv)
+    return (q / lv * rng + mn).reshape(BH, S, D)
+
 
 def set_qw_provider(fn):
     _QW_PROVIDER[0] = fn
@@ -189,6 +217,16 @@ def _unsplit_d(x, H, D):
 def pca_fake_quant_kv(k, v):
     call_idx = _QW_CTR[0]
     _QW_CTR[0] += 1
+    bt = _TW_BITS[0]
+    if bt is not None and bt.numel() == k.shape[2]:                 # N7
+        if not getattr(pca_fake_quant_kv, "_tw_announced", False):
+            pca_fake_quant_kv._tw_announced = True
+            hist = torch.bincount(bt.flatten(), minlength=5).tolist()
+            print(f"[pca_quant] TW-N7 active: token-bits histogram(0-4)={hist} "
+                  f"mean={bt.float().mean():.3f}", flush=True)
+        k_q = pca_fake_quant(k, PCA_R, res_bits_t=bt)
+        v_q = pca_fake_quant(v, PCA_R if PCA_V_MODE == "pca" else 0, res_bits_t=bt)
+        return k_q, v_q
     if PCA_QW_ALPHA > 0 and _QW_PROVIDER[0] is not None:
         w = _QW_PROVIDER[0](call_idx)
         if w is None and not getattr(pca_fake_quant_kv, "_qw_none_announced", False):
