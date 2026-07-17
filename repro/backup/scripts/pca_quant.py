@@ -17,6 +17,8 @@ import os
 import torch
 
 PCA_R = int(os.environ.get("PCA_R", "8"))
+PCA_KR = int(os.environ.get("PCA_KR", "0")) or None   # K-side rank override
+PCA_VR = int(os.environ.get("PCA_VR", "0")) or None   # V-side rank override
 PCA_COEFF_BITS = int(os.environ.get("PCA_COEFF_BITS", "2"))
 PCA_RES_GRID = os.environ.get("PCA_RES_GRID", "ternary")
 PCA_V_MODE = os.environ.get("PCA_V_MODE", "mean")
@@ -596,7 +598,7 @@ def pca_fake_quant_kv(k, v):
         k_q = _unsplit_d(pca_fake_quant(_split_d(k), PCA_R), H, D)
         v_q = _unsplit_d(pca_fake_quant(_split_d(v), PCA_R if PCA_V_MODE == "pca" else 0), H, D)
         return k_q, v_q
-    k_q = pca_fake_quant(k, PCA_R, fixed_basis=kb)
+    k_q = pca_fake_quant(k, PCA_KR or PCA_R, fixed_basis=kb)
     if PCA_V_MODE == "klt":                                          # N17a
         v_q = _klt_fake_quant(v)
     elif PCA_V_METRIC == "wo" and _VW_PROVIDER[0] is not None:       # N20
@@ -638,5 +640,5 @@ def pca_fake_quant_kv(k, v):
                     vq = torch.einsum("bhsnd,hde->bhsne", vq, Winv.to(v.device))
                 v_q = vq.reshape(B, H, S, D).to(v.dtype)
     else:
-        v_q = pca_fake_quant(v, PCA_R if PCA_V_MODE == "pca" else 0)
+        v_q = pca_fake_quant(v, (PCA_VR or PCA_R) if PCA_V_MODE == "pca" else 0)
     return k_q, v_q
