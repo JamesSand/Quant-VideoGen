@@ -90,6 +90,37 @@ BPE 与 N13 同（LC 2.16 / HY 2.27 / SF 2.15，低于 N12 与 QVG）。
 - **合体 = N15：流式 OSCAR 度量 KLT + NF 密度自适应格 + 广义特征值比特分配**
   ——全在线、零校准、零 k-means。
 
+### Idea #3（来源：DeltaQuant, CVPR 2026，`papers/DeltaQuant_CVPR2026.pdf`）：时空
+### cube-mean 当免费质心 + 按重要性自适应 cube 预算
+
+> 渊源注意：DeltaQuant 是 **QVG 同一团队网络的姊妹作**（Xi/Yang/Stoica/Keutzer/
+> Song Han），把"减局部代表+量化残差"从 KV 侧（k-means 版）搬到了 W/A 侧（cube 版）；
+> **cube 版搬回 KV 是他们没做的空位，天然满足无 k-means 约束。**
+
+**机制**：token 按 t×h×w 局部 cube（16–64 个）分组，cube 均值作 core（FP8，
+on-the-fly），只量化 delta。其 ablation 三个关键读数：
+1. **cube 越小越好（16–32 最优），全局均值直接崩**——局部性即信息，无需迭代搜索
+   （与 Idea #1 的"构造性质心"哲学同宗：这里的"质心"= 空间邻域均值，O(N) 白给）；
+2. **FP8 core 足够**（专门 ablate 过），开销 3.2%（C=64）；
+3. **阶段自适应 cube 分配**：30% 高噪 timestep 用 C=16、其余 C=64，摊销 C=33 不变
+   → PSNR +0.5——"重要性加权预算"的已验证实例，映射到 HY 断崖杠杆：**按回访概率/
+   近期注意力权重给热 chunk 小 cube/高位宽、冷 chunk 大 cube/低位宽**，摊销 BPE
+   不变、断崖后移（与 Idea #2 的重要性度量天然衔接：M_Q 决定"谁热"，cube 粒度执行）。
+
+**诊断印证**：其对 SVDQuant 的批评（激活统计随 timestep 剧烈漂移 → 离线静态变换
+在其他步有害）与我们 0715 "offline QᵀQ 基掉 2.9 dB"同一病理——凡借基/旋转必须
+逐 chunk 在线；cube-delta 无基，结构性免疫漂移。
+
+**BPE 对账（先算后跑）**：fp8 core 摊销 = 8/C bit/值；直接叠 N4（2.3125）：C=64
+→ +0.125 = 2.4375 > 2.326 ✗。必须**预算置换**：① delta 更窄更对称 → 非对称残差改
+对称（省 zero-point）；② scale 块变粗；③ 削减低秩预算。
+
+**落地形式 = N16：时空 cube-mean core（fp8）+ 对称残差 ± NF 格**——与 Idea #1
+正交可组合（cube-mean 吃局部时空冗余，KLT+NF 吃全局谱结构），与 Idea #2 的重要性
+分配在 cube 粒度上执行。LC 闸门最小矩阵：先跑"cube-mean + 对称 INT2 残差、无 PCA"
+对账 BPE，再扫 C∈{16,32,64} × core∈{fp8,int8} × 残差对称性，按 eval-protocol §一
+读 f93 三指标。
+
 ## 🏁 目标达成（2026-07-17）
 
 **N12 = K/V 双侧在线字典（逐事件重拟、fp8+scale 表）+ asym B128 残差**，

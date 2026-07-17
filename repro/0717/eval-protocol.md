@@ -103,3 +103,10 @@
   对"将来可能被回访的内容"多花比特（重要性 = 未来被检索概率 × 注意力权重）；
 - **抬高崖后地板**（INT4 证明可行：0.66 vs 0.37 SSIM）：分岔后的世界一致性；
 - **抬平台**（N4 目前在这一项上还输 QVG 3.1 dB，也要补）。
+
+## 六、Idea 清单指针
+
+方法 idea 统一记录在 [`research-log.md`](research-log.md) 的"用户思路记录"一节：
+Idea #1（构造性质心：KLT+NF 格 → N14）、Idea #2（流式 OSCAR 度量 KLT → N15）、
+**Idea #3（DeltaQuant 借鉴：时空 cube-mean 免费质心 + 重要性自适应 cube 预算 → N16，
+含 BPE 置换对账与 LC 闸门最小矩阵）**。
