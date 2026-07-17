@@ -116,6 +116,75 @@ if _pq.PCA_QW_ALPHA > 0:
         _latt.Attention.forward_with_kv_cache = _att_fwd
         print(f"[pca_launcher] N5 online q-stats enabled for LongCat "
               f"(alpha={_pq.PCA_QW_ALPHA})", flush=True)
+    elif "HY-WorldPlay" in _tgt_for_qw:
+        # Self-attention (KV-cached) uses CausalCameraPRopeWanAttnProcessor2_0;
+        # register attn instances in first-call order (= layer order) and wrap
+        # their norm_q. norm_q output is [B, S, H*D] -> reshape via attn.heads.
+        import wan.models.dits.arwan_w_action_w_mem_relative_rope as _hy
+
+        _seen = {}
+
+        def _wrap_hy_qnorm(attn):
+            if id(attn) in _seen:
+                return
+            layer = len(_seen)
+            _seen[id(attn)] = layer
+            qn = attn.norm_q
+            if qn is None or getattr(qn, "_qw_wrapped", False):
+                return
+            orig = qn.forward
+            heads = attn.heads
+
+            def wrapped(t, _orig=orig, _layer=layer, _h=heads):
+                out = _orig(t)
+                if out.dim() == 3:
+                    B, S, HD = out.shape
+                    _qw_accum(_layer, out.view(B, S, _h, HD // _h)
+                              .permute(0, 2, 1, 3))
+                return out
+
+            qn.forward = wrapped
+            qn._qw_wrapped = True
+
+        _orig_proc_call = _hy.CausalCameraPRopeWanAttnProcessor2_0.__call__
+
+        def _proc_call(self, attn, *a, **kw):
+            _wrap_hy_qnorm(attn)
+            return _orig_proc_call(self, attn, *a, **kw)
+
+        _hy.CausalCameraPRopeWanAttnProcessor2_0.__call__ = _proc_call
+        print(f"[pca_launcher] N5 online q-stats enabled for HY-WorldPlay "
+              f"(alpha={_pq.PCA_QW_ALPHA})", flush=True)
+    elif "Self-Forcing" in _tgt_for_qw:
+        # CausalWanSelfAttention.norm_q output is [B, S, H*D]; layer index by
+        # construction order of the self-attention modules.
+        import wan.modules.causal_model as _sfm
+
+        _sf_idx = [0]
+        _orig_sf_init = _sfm.CausalWanSelfAttention.__init__
+
+        def _sf_init(self, *a, **kw):
+            _orig_sf_init(self, *a, **kw)
+            layer = _sf_idx[0]
+            _sf_idx[0] += 1
+            qn = self.norm_q
+            orig = qn.forward
+            heads = self.num_heads
+
+            def wrapped(t, _orig=orig, _layer=layer, _h=heads):
+                out = _orig(t)
+                if out.dim() == 3:
+                    B, S, HD = out.shape
+                    _qw_accum(_layer, out.view(B, S, _h, HD // _h)
+                              .permute(0, 2, 1, 3))
+                return out
+
+            qn.forward = wrapped
+            qn._qw_wrapped = True
+
+        _sfm.CausalWanSelfAttention.__init__ = _sf_init
+        print(f"[pca_launcher] N5 online q-stats enabled for Self-Forcing "
+              f"(alpha={_pq.PCA_QW_ALPHA})", flush=True)
     else:
         print("[pca_launcher] WARNING: PCA_QW_ALPHA set but no q-capture "
               f"path for target {_tgt_for_qw}; QW inactive", flush=True)
