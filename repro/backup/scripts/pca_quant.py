@@ -302,7 +302,10 @@ def pca_fake_quant_kv(k, v):
             print(f"[pca_quant] N10 K<-SAS active: K={PCA_SAS_K} iters={PCA_SAS_ITERS} "
                   f"refit_every={PCA_SAS_REFIT} layers={PCA_N_LAYERS}", flush=True)
         k_q = _sas_fake_quant_k(k, layer, event_idx)
-        v_q = pca_fake_quant(v, PCA_R if PCA_V_MODE == "pca" else 0)
+        if PCA_V_MODE == "sas":                                      # N12
+            v_q = _sas_fake_quant_k(v, PCA_N_LAYERS + layer, event_idx)
+        else:
+            v_q = pca_fake_quant(v, PCA_R if PCA_V_MODE == "pca" else 0)
         return k_q, v_q
     if PCA_SUBCHUNK > 1:                                            # N9
         if not getattr(pca_fake_quant_kv, "_sc_announced", False):
