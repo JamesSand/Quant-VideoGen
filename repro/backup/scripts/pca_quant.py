@@ -598,6 +598,19 @@ def pca_fake_quant_kv(k, v):
         k_q = _unsplit_d(pca_fake_quant(_split_d(k), PCA_R), H, D)
         v_q = _unsplit_d(pca_fake_quant(_split_d(v), PCA_R if PCA_V_MODE == "pca" else 0), H, D)
         return k_q, v_q
+    # PCA_HALF_R="r1,r2": packed models (HY) — separate ranks for the
+    # rope/prope halves at the same total coef budget (r1+r2 = 2*PCA_R).
+    hr = os.environ.get("PCA_HALF_R", "")
+    if hr and k.shape[-1] == 256:
+        r1, r2 = (int(x) for x in hr.split(","))
+        if not getattr(pca_fake_quant_kv, "_hr_announced", False):
+            pca_fake_quant_kv._hr_announced = True
+            print(f"[pca_quant] half-rank active: rope r={r1} prope r={r2}", flush=True)
+        def _hq(t):
+            a = pca_fake_quant(t[..., :128].contiguous(), r1)
+            b = pca_fake_quant(t[..., 128:].contiguous(), r2)
+            return torch.cat([a, b], dim=-1)
+        return _hq(k), _hq(v)
     # OSCAR-style BF16 sink window: first PCA_SINK_T tokens of event 0 stay
     # full precision (literature-standard; amortized in BPE accounting).
     sink = int(os.environ.get("PCA_SINK_T", "0"))
