@@ -307,18 +307,34 @@ def _klt_core(x):
     nb = (S + bs - 1) // bs
     Yp = torch.nn.functional.pad(Y, (0, 0, 0, nb * bs - S))
     Yb = Yp.reshape(H, nb, bs, D)
-    if PCA_KLT_GRID == "lm":
+    if PCA_KLT_GRID in ("lm", "lm_mm", "mix"):
         deq = torch.zeros_like(Yb)
         mean = Yb.mean(2, keepdim=True)
         std = Yb.std(2, keepdim=True).clamp_min(1e-8)
+        mn = Yb.amin(2, keepdim=True)
+        mx = Yb.amax(2, keepdim=True)
         z = (Yb - mean) / std
         for b in range(1, 5):
             m = (bits == b)
             if not m.any():
                 continue
-            codes = torch.tensor(_LM_CODES[b], device=Yb.device, dtype=Yb.dtype)
-            deq = torch.where(m.view(H, 1, 1, D).expand_as(Yb),
-                              _lm_nearest(z, codes) * std + mean, deq)
+            if PCA_KLT_GRID == "mix" and b >= 3:
+                # high-bit (outlier-carrying leading) dims: exact-range uniform
+                rng = (mx - mn).clamp_min(1e-8)
+                lv = 2.0 ** b - 1
+                d_b = torch.clamp(torch.round((Yb - mn) / rng * lv), 0, lv) / lv * rng + mn
+            else:
+                codes = torch.tensor(_LM_CODES[b], device=Yb.device, dtype=Yb.dtype)
+                d_b = _lm_nearest(z, codes) * std + mean
+                if PCA_KLT_GRID in ("lm_mm", "mix"):
+                    # outlier preservation: values snapped to the outermost code
+                    # are replaced by the block's true min/max (metadata reuse:
+                    # min/max stored instead of the outer pair — same budget)
+                    hi = z > (codes[-1] + codes[-2]) / 2 * 1.0
+                    lo = z < (codes[0] + codes[1]) / 2 * 1.0
+                    d_b = torch.where(hi, mx.expand_as(d_b), d_b)
+                    d_b = torch.where(lo, mn.expand_as(d_b), d_b)
+            deq = torch.where(m.view(H, 1, 1, D).expand_as(Yb), d_b, deq)
     else:
         mn = Yb.amin(2, keepdim=True)
         mx = Yb.amax(2, keepdim=True)
