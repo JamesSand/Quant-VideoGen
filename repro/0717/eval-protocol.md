@@ -83,9 +83,8 @@
 - **需要更多卡时，自行去 research-common 集群开 pod**：操作知识库 =
   [`repro/k8s/`](../k8s/)（接入 `cluster-access.md` → 选节点 `find-free-nodes.md` →
   现成 8 卡 manifest `dev-8gpu-vetted.yaml`；开 pod 前过一遍 cluster-access 的前提），
-  另可用 **turboskill 的 k8s skill** 辅助操作；
-- 注意：Weka CSI 故障（ENG-91011）恢复前，集群 pod 可能仍卡 ContainerCreating——
-  先跑 `repro/backup/pods/weka_canary.yaml` 验证再批量开；
+  另可用 **turboskill 的 k8s skill** 辅助操作；（Weka CSI 故障 ENG-91011 已于 0717 修复，
+  集群恢复可用）
 - kubeconfig 是凭据，永不入库。
 
 ## 五、HY 全程协议的直接含义（设计提示）

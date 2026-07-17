@@ -2,8 +2,8 @@
 
 ## 现在的状态（接手即用）
 
-- **无在飞实验**，本地 8×H100 全空；集群 Weka 仍故障（ENG-91011，canary 未通过，
-  实验一律走本地）。
+- **无在飞实验**，本地 8×H100 全空。（集群 Weka 故障 ENG-91011 已于 0717 修复，
+  集群恢复可用——开 pod 姿势见 `repro/k8s/`。）
 - 全部结论已推送 together/zhizhou-dev（最新链：`8ed37bc → 1da7d22 → 48c88aa →
   6b19945 → d5593cd → 175beea → 014bfb8 → 本次三件套`）。
 - 结论总览读 [report-0716.md](report-0716.md)；数字查 [metric-matrix.md](metric-matrix.md)；
