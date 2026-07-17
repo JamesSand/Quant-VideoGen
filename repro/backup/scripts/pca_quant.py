@@ -107,8 +107,25 @@ def set_qw_provider(fn):
     _QW_PROVIDER[0] = fn
 
 
+PCA_QW_PAIR = os.environ.get("PCA_QW_PAIR", "")  # ""|"half"|"interleave":
+# average importance across RoPE pairs so the weighting is invariant to the
+# relative rotation (LC/SF rotate_half -> "half"; HY interleaved -> "interleave").
+
+
+def _qw_pair_avg(w):
+    D = w.shape[-1]
+    if PCA_QW_PAIR == "half":
+        a = (w[..., : D // 2] + w[..., D // 2:]) / 2
+        return torch.cat([a, a], dim=-1)
+    if PCA_QW_PAIR == "interleave":
+        a = (w[..., 0::2] + w[..., 1::2]) / 2
+        return torch.stack([a, a], dim=-1).reshape(*w.shape)
+    return w
+
+
 def _qw_scale(w):
     """[H, D] mean q^2 -> per-head tempered scale vector with geometric mean 1."""
+    w = _qw_pair_avg(w)
     w = w / w.mean(dim=-1, keepdim=True).clamp_min(1e-12)
     s = w.clamp_min(1e-4) ** (PCA_QW_ALPHA / 2)
     return s / torch.exp(torch.log(s).mean(dim=-1, keepdim=True))
