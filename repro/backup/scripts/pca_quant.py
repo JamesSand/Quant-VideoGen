@@ -242,9 +242,31 @@ def _unsplit_d(x, H, D):
     return x.reshape(B, H, n, S, d).permute(0, 1, 3, 2, 4).reshape(B, H, S, D)
 
 
+PCA_SUBCHUNK = int(os.environ.get("PCA_SUBCHUNK", "1"))
+# N9: fit mu/basis (and residual blocks) on temporal sub-chunks — the KV
+# distribution drifts within a chunk; finer statistics fit it better. Costs
+# one extra (mu + basis) per extra sub-chunk: BPE +0.003 (LC) / +0.011 (HY
+# at 2 sub-chunks), still < 2.326.
+
+
+def _subchunk_apply(x, fn, n):
+    S = x.shape[2]
+    cuts = [S * i // n for i in range(n + 1)]
+    return torch.cat([fn(x[:, :, cuts[i]:cuts[i + 1]]) for i in range(n)], dim=2)
+
+
 def pca_fake_quant_kv(k, v):
     call_idx = _QW_CTR[0]
     _QW_CTR[0] += 1
+    if PCA_SUBCHUNK > 1:                                            # N9
+        if not getattr(pca_fake_quant_kv, "_sc_announced", False):
+            pca_fake_quant_kv._sc_announced = True
+            print(f"[pca_quant] N9 sub-chunk stats active: n={PCA_SUBCHUNK}", flush=True)
+        k_q = _subchunk_apply(k, lambda t: pca_fake_quant(t, PCA_R), PCA_SUBCHUNK)
+        v_q = _subchunk_apply(
+            v, lambda t: pca_fake_quant(t, PCA_R if PCA_V_MODE == "pca" else 0),
+            PCA_SUBCHUNK)
+        return k_q, v_q
     bt = _TW_BITS[0]
     if bt is not None and bt.numel() == k.shape[2]:                 # N7
         if not getattr(pca_fake_quant_kv, "_tw_announced", False):
