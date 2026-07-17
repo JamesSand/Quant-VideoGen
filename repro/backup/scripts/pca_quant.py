@@ -254,6 +254,33 @@ PCA_KLT_BUDGET = float(os.environ.get("PCA_KLT_BUDGET", "2"))
 PCA_KLT_SPLIT = int(os.environ.get("PCA_KLT_SPLIT", "0"))
 PCA_KLT_SBLOCK = int(os.environ.get("PCA_KLT_SBLOCK", "128"))
 PCA_KLT_GRID = os.environ.get("PCA_KLT_GRID", "uniform")  # "uniform" | "lm"
+PCA_KLT_BMIN = int(os.environ.get("PCA_KLT_BMIN", "0"))
+# bmin=1 keeps every rotated dim alive (b=0 deletes directions — HY's revisit
+# retrieval punishes that hard).
+
+# ---- N16 (idea #3, DeltaQuant-inspired): spatio-temporal cube-mean core ----
+# Tokens are ordered frame-major/spatial within the chunk, so contiguous
+# groups of C tokens ≈ local cubes. Core = group mean stored fp8 (per-head
+# scale, same NaN guard) — the position-implied "free centroid": no index
+# bits at all. Residual = x - core via the proven asym grid.
+# BPE: 8/C core + residual(2 + 16/RES_BLOCK); C=64,B=128 -> 2.25.
+PCA_CUBE_C = int(os.environ.get("PCA_CUBE_C", "64"))
+
+
+def _cube_fake_quant(x4):
+    x = x4[0].float()                                     # [H, S, D]
+    H, S, D = x.shape
+    C = PCA_CUBE_C
+    ng = (S + C - 1) // C
+    pad = ng * C - S
+    xp = torch.nn.functional.pad(x, (0, 0, 0, pad))
+    xg = xp.reshape(H, ng, C, D)
+    core = xg.mean(2, keepdim=True)                       # [H, ng, 1, D]
+    sc = (core.abs().amax(dim=(1, 2, 3), keepdim=True) / 440.0).clamp_min(1e-8)
+    core = (core / sc).to(torch.float8_e4m3fn).float() * sc
+    res = (xg - core).reshape(H, ng * C, D)[:, :S]
+    out = core.expand_as(xg).reshape(H, ng * C, D)[:, :S] + _quant_residual(res)
+    return out.unsqueeze(0).to(x4.dtype)
 # "lm" (N14): std-normalized Gaussian Lloyd-Max codebooks per dim — the
 # constructive density-adaptive centroids (user idea #1). Zero table storage;
 # per-(dim, token-block) mean/std replace min/zero-point (same 0.125 bpe).
@@ -303,7 +330,7 @@ def _klt_core(x):
     V = (V / sc).to(torch.float8_e4m3fn).float() * sc     # fp8-stored basis
     Y = torch.einsum("hsd,hdr->hsr", Xc, V)
     bits = _greedy_bits(lam.clamp_min(0), budget_per_dim=PCA_KLT_BUDGET,
-                        bmin=0, bmax=4)                   # [H, D]
+                        bmin=PCA_KLT_BMIN, bmax=4)        # [H, D]
     bs = PCA_KLT_SBLOCK
     nb = (S + bs - 1) // bs
     Yp = torch.nn.functional.pad(Y, (0, 0, 0, nb * bs - S))
@@ -405,6 +432,15 @@ def _subchunk_apply(x, fn, n):
 def pca_fake_quant_kv(k, v):
     call_idx = _QW_CTR[0]
     _QW_CTR[0] += 1
+    if PCA_K_MODE == "cube":                                         # N16
+        if not getattr(pca_fake_quant_kv, "_cube_announced", False):
+            pca_fake_quant_kv._cube_announced = True
+            print(f"[pca_quant] N16 cube-mean active: C={PCA_CUBE_C} "
+                  f"res_block={RES_BLOCK} v_mode={PCA_V_MODE}", flush=True)
+        k_q = _cube_fake_quant(k)
+        v_q = _cube_fake_quant(v) if PCA_V_MODE == "cube" else \
+            pca_fake_quant(v, PCA_R if PCA_V_MODE == "pca" else 0)
+        return k_q, v_q
     if PCA_K_MODE == "klt":                                          # N13
         if not getattr(pca_fake_quant_kv, "_klt_announced", False):
             pca_fake_quant_kv._klt_announced = True
