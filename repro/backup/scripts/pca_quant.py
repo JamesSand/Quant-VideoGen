@@ -242,6 +242,69 @@ def _unsplit_d(x, H, D):
     return x.reshape(B, H, n, S, d).permute(0, 1, 3, 2, 4).reshape(B, H, S, D)
 
 
+# ---- N13: KLT transform coding (no k-means; PCA rotation + eigenvalue-ordered
+# greedy bit allocation — the OSCAR "important directions get more budget" idea
+# done online per chunk, as ROTATION not subtraction). Per (head, chunk):
+# Y=(X-mu)V (V = self-cov eigenbasis, stored fp8+scale; HY's packed 256-dim
+# rows rotate as two 128 halves), per-dim bits by greedy on eigenvalues
+# (budget mean = PCA_KLT_BUDGET, b in [0,4]), quantized per (dim, 128-token
+# block) asym with fp8 scale/zp. BPE: 2 + 0.125 + basis (LC .035/HY .145/SF .027).
+PCA_KLT_BUDGET = int(os.environ.get("PCA_KLT_BUDGET", "2"))
+PCA_KLT_SPLIT = int(os.environ.get("PCA_KLT_SPLIT", "0"))
+PCA_KLT_SBLOCK = int(os.environ.get("PCA_KLT_SBLOCK", "128"))
+
+
+def _klt_fake_quant(x4):
+    """x4: [1, H, S, D] -> transform-coded recon, same shape/dtype."""
+    prev_tf32 = torch.backends.cuda.matmul.allow_tf32
+    torch.backends.cuda.matmul.allow_tf32 = False
+    try:
+        x = x4[0].float()
+        H, S, D = x.shape
+        if PCA_KLT_SPLIT and D > PCA_KLT_SPLIT:
+            n = D // PCA_KLT_SPLIT
+            xs = (x.reshape(H, S, n, PCA_KLT_SPLIT).permute(0, 2, 1, 3)
+                  .reshape(H * n, S, PCA_KLT_SPLIT))
+            out = _klt_core(xs)
+            out = (out.reshape(H, n, S, PCA_KLT_SPLIT).permute(0, 2, 1, 3)
+                   .reshape(H, S, D))
+        else:
+            out = _klt_core(x)
+        return out.unsqueeze(0).to(x4.dtype)
+    finally:
+        torch.backends.cuda.matmul.allow_tf32 = prev_tf32
+
+
+def _klt_core(x):
+    H, S, D = x.shape
+    mu = x.mean(1, keepdim=True)
+    Xc = x - mu
+    cov = torch.einsum("hsd,hse->hde", Xc, Xc) / S
+    lam, V = torch.linalg.eigh(cov)
+    lam, V = lam.flip(-1), V.flip(-1)                     # descending
+    sc = (V.abs().amax(dim=(1, 2), keepdim=True) / 440.0).clamp_min(1e-8)
+    V = (V / sc).to(torch.float8_e4m3fn).float() * sc     # fp8-stored basis
+    Y = torch.einsum("hsd,hdr->hsr", Xc, V)
+    bits = _greedy_bits(lam.clamp_min(0), budget_per_dim=PCA_KLT_BUDGET,
+                        bmin=0, bmax=4)                   # [H, D]
+    bs = PCA_KLT_SBLOCK
+    nb = (S + bs - 1) // bs
+    Yp = torch.nn.functional.pad(Y, (0, 0, 0, nb * bs - S))
+    Yb = Yp.reshape(H, nb, bs, D)
+    mn = Yb.amin(2, keepdim=True)
+    mx = Yb.amax(2, keepdim=True)
+    rng = (mx - mn).clamp_min(1e-8)
+    lv = (2.0 ** bits.float().view(H, 1, 1, D) - 1)
+    q = torch.where(lv > 0,
+                    torch.clamp(torch.round((Yb - mn) / rng * lv),
+                                torch.zeros_like(lv), lv),
+                    torch.zeros_like(Yb))
+    deq = torch.where(lv > 0, q / lv.clamp_min(1.0) * rng + mn,
+                      torch.zeros_like(Yb))
+    Yq = deq.reshape(H, nb * bs, D)[:, :S]
+    return torch.einsum("hsr,hdr->hsd", Yq, V) + mu
+
+
 # ---- N10: K-side small-dictionary SAS (diagnosis: HY keys want a dictionary,
 # not a subspace; V stays N4). Table policy governs the BPE cost:
 # PCA_SAS_REFIT=n -> refit+store the centroid table every n-th quantize event
@@ -296,6 +359,18 @@ def _subchunk_apply(x, fn, n):
 def pca_fake_quant_kv(k, v):
     call_idx = _QW_CTR[0]
     _QW_CTR[0] += 1
+    if PCA_K_MODE == "klt":                                          # N13
+        if not getattr(pca_fake_quant_kv, "_klt_announced", False):
+            pca_fake_quant_kv._klt_announced = True
+            print(f"[pca_quant] N13 KLT active: budget={PCA_KLT_BUDGET} "
+                  f"split={PCA_KLT_SPLIT} sblock={PCA_KLT_SBLOCK} "
+                  f"v_mode={PCA_V_MODE}", flush=True)
+        k_q = _klt_fake_quant(k)
+        if PCA_V_MODE == "klt":
+            v_q = _klt_fake_quant(v)
+        else:
+            v_q = pca_fake_quant(v, PCA_R if PCA_V_MODE == "pca" else 0)
+        return k_q, v_q
     if PCA_K_MODE == "sas":                                          # N10
         assert PCA_N_LAYERS > 0, "PCA_N_LAYERS required for sas K mode"
         layer = call_idx % PCA_N_LAYERS
