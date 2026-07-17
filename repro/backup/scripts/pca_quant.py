@@ -252,6 +252,22 @@ def _unsplit_d(x, H, D):
 PCA_KLT_BUDGET = int(os.environ.get("PCA_KLT_BUDGET", "2"))
 PCA_KLT_SPLIT = int(os.environ.get("PCA_KLT_SPLIT", "0"))
 PCA_KLT_SBLOCK = int(os.environ.get("PCA_KLT_SBLOCK", "128"))
+PCA_KLT_GRID = os.environ.get("PCA_KLT_GRID", "uniform")  # "uniform" | "lm"
+# "lm" (N14): std-normalized Gaussian Lloyd-Max codebooks per dim — the
+# constructive density-adaptive centroids (user idea #1). Zero table storage;
+# per-(dim, token-block) mean/std replace min/zero-point (same 0.125 bpe).
+_LM_CODES = {
+    1: [-0.7980, 0.7980],
+    2: [-1.5104, -0.4528, 0.4528, 1.5104],
+    3: [-2.1520, -1.3439, -0.7560, -0.2451, 0.2451, 0.7560, 1.3439, 2.1520],
+    4: [-2.7326, -2.0690, -1.6181, -1.2562, -0.9424, -0.6568, -0.3881, -0.1284,
+        0.1284, 0.3881, 0.6568, 0.9424, 1.2562, 1.6181, 2.0690, 2.7326],
+}
+
+
+def _lm_nearest(x, codes):
+    mid = (codes[1:] + codes[:-1]) / 2
+    return codes[torch.bucketize(x, mid)]
 
 
 def _klt_fake_quant(x4):
@@ -291,16 +307,29 @@ def _klt_core(x):
     nb = (S + bs - 1) // bs
     Yp = torch.nn.functional.pad(Y, (0, 0, 0, nb * bs - S))
     Yb = Yp.reshape(H, nb, bs, D)
-    mn = Yb.amin(2, keepdim=True)
-    mx = Yb.amax(2, keepdim=True)
-    rng = (mx - mn).clamp_min(1e-8)
-    lv = (2.0 ** bits.float().view(H, 1, 1, D) - 1)
-    q = torch.where(lv > 0,
-                    torch.clamp(torch.round((Yb - mn) / rng * lv),
-                                torch.zeros_like(lv), lv),
-                    torch.zeros_like(Yb))
-    deq = torch.where(lv > 0, q / lv.clamp_min(1.0) * rng + mn,
-                      torch.zeros_like(Yb))
+    if PCA_KLT_GRID == "lm":
+        deq = torch.zeros_like(Yb)
+        mean = Yb.mean(2, keepdim=True)
+        std = Yb.std(2, keepdim=True).clamp_min(1e-8)
+        z = (Yb - mean) / std
+        for b in range(1, 5):
+            m = (bits == b)
+            if not m.any():
+                continue
+            codes = torch.tensor(_LM_CODES[b], device=Yb.device, dtype=Yb.dtype)
+            deq = torch.where(m.view(H, 1, 1, D).expand_as(Yb),
+                              _lm_nearest(z, codes) * std + mean, deq)
+    else:
+        mn = Yb.amin(2, keepdim=True)
+        mx = Yb.amax(2, keepdim=True)
+        rng = (mx - mn).clamp_min(1e-8)
+        lv = (2.0 ** bits.float().view(H, 1, 1, D) - 1)
+        q = torch.where(lv > 0,
+                        torch.clamp(torch.round((Yb - mn) / rng * lv),
+                                    torch.zeros_like(lv), lv),
+                        torch.zeros_like(Yb))
+        deq = torch.where(lv > 0, q / lv.clamp_min(1.0) * rng + mn,
+                          torch.zeros_like(Yb))
     Yq = deq.reshape(H, nb * bs, D)[:, :S]
     return torch.einsum("hsr,hdr->hsd", Yq, V) + mu
 
