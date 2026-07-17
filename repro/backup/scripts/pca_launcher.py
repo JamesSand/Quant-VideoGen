@@ -101,19 +101,17 @@ if _pq.PCA_QW_ALPHA > 0:
 
         _qw_idx = [0]
         _orig_att_init = _latt.Attention.__init__
-        _orig_att_fwd = _latt.Attention.forward_with_kv_cache
 
         def _att_init(self, *a, **kw):
             _orig_att_init(self, *a, **kw)
             self._qw_layer = _qw_idx[0]
             _qw_idx[0] += 1
-
-        def _att_fwd(self, *a, **kw):
+            # wrap immediately: LC quantizes the condition window right after
+            # the prefill (before any denoising step), so a lazy forward-hook
+            # would miss the only quantize event's stats.
             _wrap_qnorm_of(self, self._qw_layer)
-            return _orig_att_fwd(self, *a, **kw)
 
         _latt.Attention.__init__ = _att_init
-        _latt.Attention.forward_with_kv_cache = _att_fwd
         print(f"[pca_launcher] N5 online q-stats enabled for LongCat "
               f"(alpha={_pq.PCA_QW_ALPHA})", flush=True)
     elif "HY-WorldPlay" in _tgt_for_qw:
@@ -148,10 +146,18 @@ if _pq.PCA_QW_ALPHA > 0:
 
         _orig_proc_call = _hy.CausalCameraPRopeWanAttnProcessor2_0.__call__
 
+        import functools as _ft
+        import inspect as _insp
+
+        @_ft.wraps(_orig_proc_call)
         def _proc_call(self, attn, *a, **kw):
             _wrap_hy_qnorm(attn)
             return _orig_proc_call(self, attn, *a, **kw)
 
+        # diffusers filters kwargs by inspecting the processor's __call__
+        # signature — mirror the original's signature exactly, or viewmats/Ks
+        # get silently dropped.
+        _proc_call.__signature__ = _insp.signature(_orig_proc_call)
         _hy.CausalCameraPRopeWanAttnProcessor2_0.__call__ = _proc_call
         print(f"[pca_launcher] N5 online q-stats enabled for HY-WorldPlay "
               f"(alpha={_pq.PCA_QW_ALPHA})", flush=True)

@@ -148,6 +148,10 @@ def pca_fake_quant_kv(k, v):
     _QW_CTR[0] += 1
     if PCA_QW_ALPHA > 0 and _QW_PROVIDER[0] is not None:
         w = _QW_PROVIDER[0](call_idx)
+        if w is None and not getattr(pca_fake_quant_kv, "_qw_none_announced", False):
+            pca_fake_quant_kv._qw_none_announced = True
+            print(f"[pca_quant] QW WARNING: provider returned None at call {call_idx} "
+                  "(no q-stats yet) — falling back to plain N4 for this event", flush=True)
         if w is not None:
             assert _K_BASIS is None and not PCA_SPLIT_D, "QW mode is exclusive"
             s = _qw_scale(w.to(k.device, torch.float32))       # [H, D]
