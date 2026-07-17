@@ -77,7 +77,29 @@ def _ternary_quant_blocked(x, block):
     return (q * scale).reshape(S)
 
 
+# ---- N19: anchor-fidelity event schedule -------------------------------
+# PCA_EVENT_SCHED="3:t" -> the FIRST quantize event's residual uses 3-bit
+# asym (the revisit/sink anchor gets INT3-level fidelity), later events use
+# packed ternary (1.6 b real accounting). Amortized BPE over a video with
+# n>=2 events stays under budget; with a single event (LC's cond window)
+# the schedule degenerates to the flat default grid (plain N4).
+PCA_EVENT_SCHED = os.environ.get("PCA_EVENT_SCHED", "")
+_EVENT_IDX = [0]
+
+
 def _quant_residual(x):
+    if PCA_EVENT_SCHED:
+        first, later = PCA_EVENT_SCHED.split(":")
+        if _EVENT_IDX[0] == 0:
+            if first == "3":
+                return _asym_quant_lastdim_grouped(x, 3, RES_BLOCK)
+            if first == "4":
+                return _asym_quant_lastdim_grouped(x, 4, RES_BLOCK)
+        else:
+            if later == "t":
+                return _ternary_quant_blocked(x, RES_BLOCK)
+            if later == "2":
+                return _asym_quant_lastdim_grouped(x, 2, RES_BLOCK)
     if PCA_RES_GRID == "ternary":
         return _ternary_quant_blocked(x, RES_BLOCK)
     if RES_BLOCK > x.shape[-1]:
@@ -442,6 +464,11 @@ def _subchunk_apply(x, fn, n):
 def pca_fake_quant_kv(k, v):
     call_idx = _QW_CTR[0]
     _QW_CTR[0] += 1
+    if PCA_EVENT_SCHED and PCA_N_LAYERS > 0:
+        _EVENT_IDX[0] = call_idx // PCA_N_LAYERS
+        if call_idx % PCA_N_LAYERS == 0:
+            print(f"[pca_quant] N19 sched event={_EVENT_IDX[0]} "
+                  f"grid={'first' if _EVENT_IDX[0]==0 else 'later'}", flush=True)
     if PCA_K_MODE == "cube":                                         # N16
         if not getattr(pca_fake_quant_kv, "_cube_announced", False):
             pca_fake_quant_kv._cube_announced = True
