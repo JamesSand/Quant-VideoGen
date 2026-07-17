@@ -100,6 +100,10 @@ def _quant_residual(x):
                 return _ternary_quant_blocked(x, RES_BLOCK)
             if later == "2":
                 return _asym_quant_lastdim_grouped(x, 2, RES_BLOCK)
+            if later == "1":
+                # 1-bit asym {min, max}: accounting-unambiguous (no packing
+                # debate) — the schedule wins under ANY convention
+                return _asym_quant_lastdim_grouped(x, 1, RES_BLOCK)
     if PCA_RES_GRID == "ternary":
         return _ternary_quant_blocked(x, RES_BLOCK)
     if RES_BLOCK > x.shape[-1]:
