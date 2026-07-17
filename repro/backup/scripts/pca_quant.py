@@ -151,6 +151,10 @@ def pca_fake_quant_kv(k, v):
         if w is not None:
             assert _K_BASIS is None and not PCA_SPLIT_D, "QW mode is exclusive"
             s = _qw_scale(w.to(k.device, torch.float32))       # [H, D]
+            if not getattr(pca_fake_quant_kv, "_qw_announced", False):
+                pca_fake_quant_kv._qw_announced = True
+                print(f"[pca_quant] QW active: alpha={PCA_QW_ALPHA} pair={PCA_QW_PAIR or 'none'} "
+                      f"s[min/med/max]={s.min():.3f}/{s.median():.3f}/{s.max():.3f}", flush=True)
             sk = s[None, :, None, :]
             k_q = (pca_fake_quant(k.float() * sk, PCA_R) / sk).to(k.dtype)
             v_q = pca_fake_quant(v, PCA_R if PCA_V_MODE == "pca" else 0)
