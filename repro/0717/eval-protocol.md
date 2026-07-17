@@ -77,7 +77,18 @@
    HY 上加秩（r=8）与半头分裂也已证伪（0717）。
 5. 手段：web 检索相关工作（online importance-aware KV quantization）+ 自行设计。
 
-## 四、HY 全程协议的直接含义（设计提示）
+## 四、算力资源（用户 0717 授权）
+
+- 默认用本地 dev-box 8×H100；
+- **需要更多卡时，自行去 research-common 集群开 pod**：操作知识库 =
+  [`repro/k8s/`](../k8s/)（接入 `cluster-access.md` → 选节点 `find-free-nodes.md` →
+  现成 8 卡 manifest `dev-8gpu-vetted.yaml`；开 pod 前过一遍 cluster-access 的前提），
+  另可用 **turboskill 的 k8s skill** 辅助操作；
+- 注意：Weka CSI 故障（ENG-91011）恢复前，集群 pod 可能仍卡 ContainerCreating——
+  先跑 `repro/backup/pods/weka_canary.yaml` 验证再批量开；
+- kubeconfig 是凭据，永不入库。
+
+## 五、HY 全程协议的直接含义（设计提示）
 
 全程均值 = (断崖前长度 × 平台值 + 崖后长度 × 地板值) / 总长。三个可动的杠杆：
 
