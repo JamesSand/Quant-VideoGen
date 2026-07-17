@@ -242,6 +242,36 @@ def _unsplit_d(x, H, D):
     return x.reshape(B, H, n, S, d).permute(0, 1, 3, 2, 4).reshape(B, H, S, D)
 
 
+# ---- N10: K-side small-dictionary SAS (diagnosis: HY keys want a dictionary,
+# not a subspace; V stays N4). Table policy governs the BPE cost:
+# PCA_SAS_REFIT=n -> refit+store the centroid table every n-th quantize event
+# (warm-started), reuse frozen in between; amortized table cost = K*16/(N*n).
+PCA_K_MODE = os.environ.get("PCA_K_MODE", "pca")      # "pca" | "sas"
+PCA_SAS_K = int(os.environ.get("PCA_SAS_K", "256"))
+PCA_SAS_ITERS = int(os.environ.get("PCA_SAS_ITERS", "20"))
+PCA_SAS_REFIT = int(os.environ.get("PCA_SAS_REFIT", "1"))
+PCA_N_LAYERS = int(os.environ.get("PCA_N_LAYERS", "0"))   # required for sas
+_SAS_TABLES = {}                                          # layer -> [H, K, D]
+
+
+def _sas_fake_quant_k(x, layer, event_idx):
+    """x: [1, H, S, D] -> dictionary-smoothed + quantized-residual recon."""
+    from quant_videogen.kmeans.kmeans_euclid import batch_kmeans_Euclid
+    xf = x[0].float()                                     # [H, S, D]
+    refit = (event_idx % PCA_SAS_REFIT == 0) or (layer not in _SAS_TABLES)
+    if refit:
+        init = _SAS_TABLES.get(layer)
+        _, cent = batch_kmeans_Euclid(
+            xf, PCA_SAS_K, max_iters=PCA_SAS_ITERS, init_centroids=init)[:2]
+        _SAS_TABLES[layer] = cent
+    else:
+        cent = _SAS_TABLES[layer]
+    a = torch.cdist(xf, cent).argmin(-1)                  # [H, S]
+    sm = torch.gather(cent, 1, a.unsqueeze(-1).expand(-1, -1, xf.shape[-1]))
+    out = sm + _quant_residual(xf - sm)
+    return out.unsqueeze(0).to(x.dtype)
+
+
 PCA_SUBCHUNK = int(os.environ.get("PCA_SUBCHUNK", "1"))
 # N9: fit mu/basis (and residual blocks) on temporal sub-chunks — the KV
 # distribution drifts within a chunk; finer statistics fit it better. Costs
@@ -258,6 +288,17 @@ def _subchunk_apply(x, fn, n):
 def pca_fake_quant_kv(k, v):
     call_idx = _QW_CTR[0]
     _QW_CTR[0] += 1
+    if PCA_K_MODE == "sas":                                          # N10
+        assert PCA_N_LAYERS > 0, "PCA_N_LAYERS required for sas K mode"
+        layer = call_idx % PCA_N_LAYERS
+        event_idx = call_idx // PCA_N_LAYERS
+        if not getattr(pca_fake_quant_kv, "_sas_announced", False):
+            pca_fake_quant_kv._sas_announced = True
+            print(f"[pca_quant] N10 K<-SAS active: K={PCA_SAS_K} iters={PCA_SAS_ITERS} "
+                  f"refit_every={PCA_SAS_REFIT} layers={PCA_N_LAYERS}", flush=True)
+        k_q = _sas_fake_quant_k(k, layer, event_idx)
+        v_q = pca_fake_quant(v, PCA_R if PCA_V_MODE == "pca" else 0)
+        return k_q, v_q
     if PCA_SUBCHUNK > 1:                                            # N9
         if not getattr(pca_fake_quant_kv, "_sc_announced", False):
             pca_fake_quant_kv._sc_announced = True
