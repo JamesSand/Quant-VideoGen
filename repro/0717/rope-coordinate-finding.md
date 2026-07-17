@@ -22,13 +22,17 @@ post-RoPE 形态**。因此可以缓存 post-RoPE key，在这个固定坐标系
 - **LC：基本不受影响**——条件窗 KV 段首 prefill+量化，段内所有 denoising 步用
   同一套 grid 位置读取；下一段旧 cache **丢弃重建**。量化 key 从生到死只经历
   一种旋转 = 生命周期内固定坐标系（接近 LLM 情形）；
-- **SF：配置相关**——默认滚动窗位置随窗重排（动态）；我们评测的
-  `local_attn_size=195` 全注意力下窗口不滚，位置全程固定。
+- **SF：固定（0718 二次修正，用户指正）**——原生路径 rope 在**写入时**按
+  **绝对帧索引**施加（[causal_model.py#L222-L226](../../experiments/Self-Forcing/wan/modules/causal_model.py#L222-L226)，
+  缓存 post-RoPE key），滑窗只截断读取范围、不重锚定位置——**滑窗注意力不影响
+  RoPE 编码**。QVG fork 的 pre-RoPE 路径（[#L277-L304](../../experiments/Self-Forcing/wan/modules/causal_model.py#L277-L304)）
+  是量化 kernel 的工程选择：读取时现转、且未实现滑窗（超窗 raise，即 0716 记录的
+  上游缺口）；全注意力下每 key 每次读取旋转仍相同 = 语义不变。
 
-**实验印证**：各向异性方法的死法严格遵循此梯度——N14/KLT 系在 LC 只轻伤
-（30.9，仍超 QVG），在 HY 灾难（16.6 全场最差）；N20 的 W_O 整形 LC +1.12 dB、
-HY 无效。QVG 统一采用 "pre-RoPE key caching" 是为覆盖最坏情形（HY 类）并支撑
-其融合 kernel。
+**实验印证**：各向异性方法**只在 HY（唯一动态坐标系）灾难性失败**（16.6 全场
+最差），LC 轻伤（30.9 仍超 QVG）；N20 的 W_O 整形 LC +1.12 dB、HY 无效（SF 上
+N20 的失败是 V 侧+闭环累积，V 无 rope，不构成本理论反例）。QVG 统一采用
+"pre-RoPE key caching" 是为覆盖最坏情形（HY 类）并统一其融合 kernel 接口。
 
 **边界（诚实条款）**：本坐标系理论只解释 **K 侧**。V 无 RoPE，但 V 侧各向异性
 同样失败（V-KLT 在 LC 26.93；N20 在 SF 700f 掉线）——V 的死因是度量错位
