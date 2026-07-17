@@ -265,9 +265,12 @@ def _sas_fake_quant_k(x, layer, event_idx):
         _, cent = batch_kmeans_Euclid(
             xf, PCA_SAS_K, max_iters=PCA_SAS_ITERS, init_centroids=init)[:2]
         if PCA_SAS_TAB8:
-            # store the table in fp8 (E4M3); residual is computed against the
-            # fp8 centroids, so decode is consistent — table cost halves.
-            cent = cent.to(torch.float8_e4m3fn).float()
+            # store the table in fp8 (E4M3) with a per-head fp16 scale —
+            # LC's deep-layer V centroids reach |1440| > E4M3's 448 max and
+            # e4m3fn overflows to NaN without it. Residual is computed against
+            # the dequantized table, so decode stays consistent.
+            sc = (cent.abs().amax(dim=(1, 2), keepdim=True) / 440.0).clamp_min(1e-8)
+            cent = (cent / sc).to(torch.float8_e4m3fn).float() * sc
         _SAS_TABLES[layer] = cent
     else:
         cent = _SAS_TABLES[layer]
