@@ -1,8 +1,8 @@
 # Report 2026-07-16：PCA-KV N4 方案与三模型评测结果
 
 > 快报：N4 = **LC 首帧三指标全胜（+3.1 dB）/ HY drop 前落败 3.1 dB / SF 打平（含 VBench）**，
-> 压缩率始终高于 QVG。评测口径本日全面对齐 paper 并勘误（SSIM 实现、HY 协议、paper 笔误），
-> 勘误详情见 §2.1 与 [hy-ref-metrics.md](hy-ref-metrics.md)。
+> BPE 始终低于 QVG。评测口径本日全面对齐 paper 并勘误（SSIM 实现、HY 协议、paper 笔误），
+> 口径详情见 §一末尾与 [hy-ref-metrics.md](hy-ref-metrics.md)。
 
 ## 一、N4 方案是怎么跑的
 
