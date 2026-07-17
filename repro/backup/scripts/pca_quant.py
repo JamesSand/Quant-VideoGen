@@ -211,7 +211,9 @@ def pca_fake_quant_kv(k, v):
 
             if PCA_QW_MODE == "bits":                       # N6
                 wn = _qw_pair_avg(w.to(k.device, torch.float32))
-                bits = to_k_layout(_greedy_bits(wn))
+                # PCA_QW_ALPHA doubles as the greedy temper: 1.0 = raw energy,
+                # 0.5 = sqrt-tempered (spreads bits, less plain-MSE damage)
+                bits = to_k_layout(_greedy_bits(wn.clamp_min(1e-12) ** PCA_QW_ALPHA))
                 if not getattr(pca_fake_quant_kv, "_qw_announced", False):
                     pca_fake_quant_kv._qw_announced = True
                     hist = torch.bincount(bits.flatten(), minlength=5).tolist()
