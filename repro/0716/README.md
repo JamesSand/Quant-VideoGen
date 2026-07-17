@@ -1,6 +1,7 @@
 # 0716 工作目录
 
-收尾三件套（report-0716.md / HANDOFF.md / REPRODUCE.md）**待写**（见 repro/README.md 约定）。
+收尾三件套：[report-0716.md](report-0716.md)（presentation 级总报告）·
+[HANDOFF.md](HANDOFF.md)（接手须知）· [REPRODUCE.md](REPRODUCE.md)（指令级复现）。
 
 ## 文档地图（本目录）
 
