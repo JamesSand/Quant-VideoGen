@@ -29,15 +29,43 @@ if K_BASIS_FILE:
     _K_BASIS = torch.load(K_BASIS_FILE, map_location="cpu")["eigvecs"]
 
 
-def _asym_quant_lastdim_grouped(x, bits, group):
+PCA_RES_MSEOPT = os.environ.get("PCA_RES_MSEOPT", "0") == "1"
+# N8: per-block MSE-optimal range shrinkage for the asym residual quantizer.
+# Searches a few symmetric-about-center shrink ratios per block and keeps the
+# min-MSE one; min-max (ratio 1.0) is in the search set, so never worse in
+# block MSE. Same (scale, zero) metadata -> BPE unchanged.
+_MSE_RATIOS = (1.0, 0.92, 0.85, 0.78, 0.70, 0.62)
+
+
+def _asym_quant_lastdim_grouped(x, bits, group, mse_opt=None):
     """Asymmetric fake-quant with one (scale, zero) per group along the last dim."""
+    if mse_opt is None:
+        mse_opt = PCA_RES_MSEOPT
     S = x.shape
     xg = x.reshape(*S[:-1], S[-1] // group, group)
     mn = xg.amin(dim=-1, keepdim=True)
     mx = xg.amax(dim=-1, keepdim=True)
-    scale = ((mx - mn) / (2 ** bits - 1)).clamp_min(1e-8)
-    q = torch.clamp(torch.round((xg - mn) / scale), 0, 2 ** bits - 1)
-    return (q * scale + mn).reshape(S)
+    if not mse_opt:
+        scale = ((mx - mn) / (2 ** bits - 1)).clamp_min(1e-8)
+        q = torch.clamp(torch.round((xg - mn) / scale), 0, 2 ** bits - 1)
+        return (q * scale + mn).reshape(S)
+    ctr = (mx + mn) / 2
+    half0 = (mx - mn) / 2
+    best_err = None
+    best = None
+    for r in _MSE_RATIOS:
+        lo = ctr - half0 * r
+        scale = (half0 * 2 * r / (2 ** bits - 1)).clamp_min(1e-8)
+        q = torch.clamp(torch.round((xg - lo) / scale), 0, 2 ** bits - 1)
+        deq = q * scale + lo
+        err = (deq - xg).pow(2).sum(dim=-1, keepdim=True)
+        if best is None:
+            best, best_err = deq, err
+        else:
+            better = err < best_err
+            best = torch.where(better, deq, best)
+            best_err = torch.minimum(best_err, err)
+    return best.reshape(S)
 
 
 def _ternary_quant_blocked(x, block):
