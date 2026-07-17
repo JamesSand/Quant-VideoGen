@@ -86,12 +86,35 @@ def pca_fake_quant(x, r, fixed_basis=None):
         torch.backends.cuda.matmul.allow_tf32 = prev_tf32
 
 
+PCA_SPLIT_D = int(os.environ.get("PCA_SPLIT_D", "0"))  # >0: split D into
+# sub-heads of this width before PCA (e.g. 128 on HY's 256-dim heads so the
+# subspace granularity matches the LC/SF setup). 0 = off.
+
+
+def _split_d(x):
+    B, H, S, D = x.shape
+    n = D // PCA_SPLIT_D
+    return x.reshape(B, H, S, n, PCA_SPLIT_D).permute(0, 1, 3, 2, 4).reshape(B, H * n, S, PCA_SPLIT_D)
+
+
+def _unsplit_d(x, H, D):
+    B, Hn, S, d = x.shape
+    n = D // d
+    return x.reshape(B, H, n, S, d).permute(0, 1, 3, 2, 4).reshape(B, H, S, D)
+
+
 def pca_fake_quant_kv(k, v):
     kb = None
     if _K_BASIS is not None:
         layer = _LAYER_CTR[0] % _K_BASIS.shape[0]
         _LAYER_CTR[0] += 1
         kb = _K_BASIS[layer]
+    if PCA_SPLIT_D and k.shape[-1] > PCA_SPLIT_D:
+        H, D = k.shape[1], k.shape[-1]
+        assert kb is None, "PCA_SPLIT_D incompatible with external basis"
+        k_q = _unsplit_d(pca_fake_quant(_split_d(k), PCA_R), H, D)
+        v_q = _unsplit_d(pca_fake_quant(_split_d(v), PCA_R if PCA_V_MODE == "pca" else 0), H, D)
+        return k_q, v_q
     k_q = pca_fake_quant(k, PCA_R, fixed_basis=kb)
     v_q = pca_fake_quant(v, PCA_R if PCA_V_MODE == "pca" else 0)
     return k_q, v_q
