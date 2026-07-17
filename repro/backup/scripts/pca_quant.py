@@ -250,6 +250,7 @@ PCA_K_MODE = os.environ.get("PCA_K_MODE", "pca")      # "pca" | "sas"
 PCA_SAS_K = int(os.environ.get("PCA_SAS_K", "256"))
 PCA_SAS_ITERS = int(os.environ.get("PCA_SAS_ITERS", "20"))
 PCA_SAS_REFIT = int(os.environ.get("PCA_SAS_REFIT", "1"))
+PCA_SAS_TAB8 = os.environ.get("PCA_SAS_TAB8", "0") == "1"
 PCA_N_LAYERS = int(os.environ.get("PCA_N_LAYERS", "0"))   # required for sas
 _SAS_TABLES = {}                                          # layer -> [H, K, D]
 
@@ -263,6 +264,10 @@ def _sas_fake_quant_k(x, layer, event_idx):
         init = _SAS_TABLES.get(layer)
         _, cent = batch_kmeans_Euclid(
             xf, PCA_SAS_K, max_iters=PCA_SAS_ITERS, init_centroids=init)[:2]
+        if PCA_SAS_TAB8:
+            # store the table in fp8 (E4M3); residual is computed against the
+            # fp8 centroids, so decode is consistent — table cost halves.
+            cent = cent.to(torch.float8_e4m3fn).float()
         _SAS_TABLES[layer] = cent
     else:
         cent = _SAS_TABLES[layer]
