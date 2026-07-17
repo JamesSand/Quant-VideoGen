@@ -33,5 +33,23 @@ def _patched(k, v, quant_type, quant_config, quantize_fn):
 
 
 _compress.compress_kv_cache = _patched
+
+# SF upstream inconsistency: its MSE printer wants the fake tensor in BHSD (the
+# compress input layout) but ChunkedKVCache.store_quantized forwards tensors to
+# write(), which expects BSHD. Fix at store time (PCA_SF_STORE_FIX=1).
+if os.environ.get("PCA_SF_STORE_FIX", "0") == "1":
+    import torch as _torch
+    import quant_videogen.kv_cache as _kvc
+
+    _orig_store = _kvc.ChunkedKVCache.store_quantized
+
+    def _store_fix(self, start_index, end_index, quant_data):
+        if _torch.is_tensor(quant_data):
+            return self.write(start_index, end_index,
+                              quant_data.permute(0, 2, 1, 3).contiguous())
+        return _orig_store(self, start_index, end_index, quant_data)
+
+    _kvc.ChunkedKVCache.store_quantized = _store_fix
+
 _target = os.environ.get("PCA_TARGET", "experiments/LongCat/run_long_t2v.py")
 runpy.run_path(_target, run_name="__main__")
