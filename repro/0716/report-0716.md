@@ -17,6 +17,23 @@ X[chunk, head]  ≈  mu  +  quant₂(coef) · V₄ᵀ  +  asymquant₂(residual,
 2. 每 token 4 个投影系数，**2-bit 非对称量化**；
 3. 残差展平后 **2-bit 非对称、block=128** 量化。
 
+```mermaid
+flowchart TB
+    A["KV chunk（单 head）<br/>X: S×D（D=128 LC/SF, 256 HY）"] --> B["mu = mean(X)<br/>Xc = X − mu"]
+    B --> C["cov = XcᵀXc（D×D）<br/>eigh → top-4 基 V₄（D×4）"]
+    B --> D["投影系数 coef = Xc·V₄（S×4）"]
+    C --> D
+    D --> E["quant₂(coef)<br/>2-bit 非对称量化"]
+    E --> F["低秩重建<br/>X̂_lr = mu + coef̂·V₄ᵀ"]
+    F --> G["residual = X − X̂_lr"]
+    B --> G
+    G --> H["展平 → asymquant₂<br/>2-bit，block=128"]
+    E --> I
+    C --> I
+    H --> I["打包存储：mu(D) + V₄(D×4) + coef̂(S×4×2b)<br/>+ reŝ(S×D×2b) + 各块 scale/zp<br/>→ BPE 2.253 fake / 2.3125 real"]
+    I --> J["解码（attention 前）：<br/>X̂ = mu + coef̂·V₄ᵀ + reŝ<br/>一次瘦 GEMM + 逐元素加"]
+```
+
 **账本**：BPE = 2.253（fake 口径）/ 2.3125（真实现含 zero-point）vs QVG INT2 的 2.326
 ——比特更低。均摊项 = mu + V₄ + 各块 scale/zp。方案由 auto-research 两轮扫出
 （r=4>6>8>16、V 侧 PCA +1.2-1.5 dB、非对称残差 >> ternary +1.8 dB，
