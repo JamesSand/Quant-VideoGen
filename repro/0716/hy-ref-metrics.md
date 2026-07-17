@@ -16,7 +16,11 @@ starts to diverge..."）；**HY 的 PSNR/SSIM/LPIPS 协议在 paper 中未指定
 2. **发布 repo 无法复现 paper 的 HY 对比**：官方 `run_bf16.sh` 与 `run_qvg.sh` 配置
    根本不配对（memory 56/52 vs 48/44；num_chunk 14 vs 12→帧数都不同；pose 7 段 vs
    6 段）——paper 的 HY 参考管线未完整发布。paper 正文还说 HY chunk=12 帧，发布代码
-   实为 16 帧/chunk。
+   实为 16 帧/chunk；**且 12 帧/chunk 在发布代码里结构性跑不通**（0717 实测）：
+   `generate.py:205` 强制 memory−context=pred_latent_size（pred=3 时配额=3），而
+   `select_mem_frames_wan`（utils.py）的 memory 帧按 4 帧块分配（配额必须是 4 的倍数）
+   ——两断言在 pred=3 下不可同时满足，"12 帧下全程不跳崖→全程均值≈29"的假设用发布
+   代码**不可检验**。
 3. **逐帧结构 = 平台 + 断崖**（我们的 QVG run，vs 配置匹配的 BF16 参考）：
    帧 1-28 平台（PSNR 33.6-37.2，缓降），帧 29 断崖（25.4），帧 30 起饱和 ~19 dB
    （SSIM 0.55，内容分岔）。断崖位置 ≈ pose 从 `w-8` 切 `s-8` 的**回访点**——镜头
