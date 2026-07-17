@@ -90,6 +90,29 @@ PCA_SPLIT_D = int(os.environ.get("PCA_SPLIT_D", "0"))  # >0: split D into
 # sub-heads of this width before PCA (e.g. 128 on HY's 256-dim heads so the
 # subspace granularity matches the LC/SF setup). 0 = off.
 
+# ---- N5: online Q-energy-weighted K quantization (OSCAR idea, online) ----
+# PCA_QW_ALPHA > 0 enables it. The launcher captures per-(layer, head, dim)
+# running E[q^2] during generation (free — no calibration pass) and registers
+# a provider; K is scaled dim-wise by importance^{alpha/2} before the N4
+# pipeline and unscaled after, so basis + residual quantizer minimize the
+# attention-logit-weighted error instead of plain MSE. V is untouched.
+# Storage cost of the real implementation: one extra fp16 D-vector per
+# (head, chunk) — same amortization class as mu.
+PCA_QW_ALPHA = float(os.environ.get("PCA_QW_ALPHA", "0"))
+_QW_PROVIDER = [None]   # fn(call_idx) -> [H, D] mean q^2 (any device) or None
+_QW_CTR = [0]
+
+
+def set_qw_provider(fn):
+    _QW_PROVIDER[0] = fn
+
+
+def _qw_scale(w):
+    """[H, D] mean q^2 -> per-head tempered scale vector with geometric mean 1."""
+    w = w / w.mean(dim=-1, keepdim=True).clamp_min(1e-12)
+    s = w.clamp_min(1e-4) ** (PCA_QW_ALPHA / 2)
+    return s / torch.exp(torch.log(s).mean(dim=-1, keepdim=True))
+
 
 def _split_d(x):
     B, H, S, D = x.shape
@@ -104,6 +127,17 @@ def _unsplit_d(x, H, D):
 
 
 def pca_fake_quant_kv(k, v):
+    call_idx = _QW_CTR[0]
+    _QW_CTR[0] += 1
+    if PCA_QW_ALPHA > 0 and _QW_PROVIDER[0] is not None:
+        w = _QW_PROVIDER[0](call_idx)
+        if w is not None:
+            assert _K_BASIS is None and not PCA_SPLIT_D, "QW mode is exclusive"
+            s = _qw_scale(w.to(k.device, torch.float32))       # [H, D]
+            sk = s[None, :, None, :]
+            k_q = (pca_fake_quant(k.float() * sk, PCA_R) / sk).to(k.dtype)
+            v_q = pca_fake_quant(v, PCA_R if PCA_V_MODE == "pca" else 0)
+            return k_q, v_q
     kb = None
     if _K_BASIS is not None:
         layer = _LAYER_CTR[0] % _K_BASIS.shape[0]
