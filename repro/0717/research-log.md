@@ -30,5 +30,6 @@ SF VBench700 QVG=70.41。N4 候选现状：LC 31.79/0.9424/0.067 ✓ / HY 18.15 
 | 2b | （bug 修复）HY 首轮三臂崩溃 | — | — | diffusers 按签名过滤 processor kwargs，包装函数吞了 viewmats → 已用 __signature__ 镜像修复 |
 | 3 | N5 α=1.0 pair=half @LC（真激活） | LC f93 28.88 / 0.9049 / 0.0932 | **✗ 淘汰** | s 达 54×，过度倾斜毁整体保真——α=1.0 出局 |
 | 4 | **N5 α=0.5 pair=half @LC（真激活）** | **LC f93 31.86 / 0.9417 / 0.0672** | **闸门① ✓**（超 QVG；≈N4，PSNR +0.07） | s 范围 0.31-7.4，温和倾斜；进 HY |
-| 5 | N5 α∈{0.5,1.0}×配对 @HY（rope+prope 平铺修复后） | 跑中 | — | GPU5-7；HY s 范围 0.25-11.8 |
+| 5 | N5 α=0.5 pair=interleave @HY | HY 全程 17.30 / 0.4458 / 0.4222 | **闸门② ✗ → N5 判死** | 三臂全低于 N4/QVG（α1.0=17.11，无配对=16.40）。失败机制：对角缩放与残差 per-block minmax 打架——拉伸撑大块内 range，低权维步长爆炸 |
+| 6 | **N6：同预算按维比特重分配**（共享 scale 无 range 拉伸；贪心 Block-GTQ 规则，b∈[1,4]，Σ=2D；BPE 严格不变） | LC 跑中 | — | 单测：加权 MSE 比均匀好 2.2×；N5 失败机制的直接对症解 |
 | 2c | （bug 修复 ×2）HY head_dim 打包 | — | — | ①HY cache head_dim = 模型×2（rope+prope 拼接）→ 重要性平铺；②LC 量化在 prefill 后即刻发生 → q_norm 包装移到 __init__ |
