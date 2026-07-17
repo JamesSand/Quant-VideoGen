@@ -601,16 +601,20 @@ def pca_fake_quant_kv(k, v):
     # PCA_HALF_R="r1,r2": packed models (HY) — separate ranks for the
     # rope/prope halves at the same total coef budget (r1+r2 = 2*PCA_R).
     hr = os.environ.get("PCA_HALF_R", "")
-    if hr and k.shape[-1] == 256:
-        r1, r2 = (int(x) for x in hr.split(","))
-        if not getattr(pca_fake_quant_kv, "_hr_announced", False):
-            pca_fake_quant_kv._hr_announced = True
-            print(f"[pca_quant] half-rank active: rope r={r1} prope r={r2}", flush=True)
-        def _hq(t):
+    hrk = os.environ.get("PCA_HALF_R_K", "") or hr
+    hrv = os.environ.get("PCA_HALF_R_V", "") or hr
+    if (hrk or hrv) and k.shape[-1] == 256:
+        def _hq(t, spec):
+            r1, r2 = (int(x) for x in spec.split(","))
             a = pca_fake_quant(t[..., :128].contiguous(), r1)
             b = pca_fake_quant(t[..., 128:].contiguous(), r2)
             return torch.cat([a, b], dim=-1)
-        return _hq(k), _hq(v)
+        if not getattr(pca_fake_quant_kv, "_hr_announced", False):
+            pca_fake_quant_kv._hr_announced = True
+            print(f"[pca_quant] half-rank active: K={hrk} V={hrv}", flush=True)
+        k_q = _hq(k, hrk) if hrk else pca_fake_quant(k, PCA_KR or PCA_R)
+        v_q = _hq(v, hrv) if hrv else pca_fake_quant(v, (PCA_VR or PCA_R))
+        return k_q, v_q
     # OSCAR-style BF16 sink window: first PCA_SINK_T tokens of event 0 stay
     # full precision (literature-standard; amortized in BPE accounting).
     sink = int(os.environ.get("PCA_SINK_T", "0"))
