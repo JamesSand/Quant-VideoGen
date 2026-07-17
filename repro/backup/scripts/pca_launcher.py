@@ -295,6 +295,92 @@ if os.environ.get("PCA_V_METRIC", "") == "wo":
 
         _pq.set_vw_provider(_vw_provider)
         print("[pca_launcher] N20 W_O-metric V provider enabled (LongCat)", flush=True)
+    elif "HY-WorldPlay" in _tgt_vw:
+        import torch as _t4
+        import wan.models.dits.arwan_w_action_w_mem_relative_rope as _hy2
+        import functools as _ft2
+        import inspect as _insp2
+
+        _vw_mods_hy = {}
+        _vw_cache_hy = {}
+        _orig_call_vw = _hy2.CausalCameraPRopeWanAttnProcessor2_0.__call__
+
+        @_ft2.wraps(_orig_call_vw)
+        def _call_vw(self, attn, *a, **kw):
+            if id(attn) not in _vw_mods_hy:
+                _vw_mods_hy[id(attn)] = (len(_vw_mods_hy), attn)
+            return _orig_call_vw(self, attn, *a, **kw)
+
+        _call_vw.__signature__ = _insp2.signature(_orig_call_vw)
+        _hy2.CausalCameraPRopeWanAttnProcessor2_0.__call__ = _call_vw
+        _vw_by_layer = {}
+
+        def _vw_provider_hy(call_idx):
+            if not _vw_mods_hy:
+                return None
+            if not _vw_by_layer:
+                for _id, (lay, m) in _vw_mods_hy.items():
+                    _vw_by_layer[lay] = m
+            L = len(_vw_by_layer)
+            layer = call_idx % L
+            if layer not in _vw_cache_hy:
+                mod = _vw_by_layer.get(layer)
+                if mod is None:
+                    return None
+                with _t4.no_grad():
+                    Wt = mod.to_out[0].weight.detach().float()
+                    H = mod.heads
+                    D = Wt.shape[1] // H
+                    Ws, Wis = [], []
+                    for h in range(H):
+                        blk = Wt[:, h * D:(h + 1) * D]
+                        G = blk.t() @ blk
+                        G = G + 1e-3 * G.diagonal().mean() * _t4.eye(D, device=G.device)
+                        lam, U = _t4.linalg.eigh(G)
+                        Ws.append(U @ _t4.diag(lam.clamp_min(1e-8).sqrt()) @ U.t())
+                        Wis.append(U @ _t4.diag(1.0 / lam.clamp_min(1e-8).sqrt()) @ U.t())
+                    _vw_cache_hy[layer] = (_t4.stack(Ws), _t4.stack(Wis))
+            return _vw_cache_hy[layer]
+
+        _pq.set_vw_provider(_vw_provider_hy)
+        print("[pca_launcher] N20 W_O-metric V provider enabled (HY)", flush=True)
+    elif "Self-Forcing" in _tgt_vw:
+        import torch as _t5
+        import wan.modules.causal_model as _sfm2
+
+        _vw_mods_sf = []
+        _vw_cache_sf = {}
+        _orig_sf_init_vw = _sfm2.CausalWanSelfAttention.__init__
+
+        def _sf_init_vw(self, *a, **kw):
+            _orig_sf_init_vw(self, *a, **kw)
+            _vw_mods_sf.append(self)
+
+        _sfm2.CausalWanSelfAttention.__init__ = _sf_init_vw
+
+        def _vw_provider_sf(call_idx):
+            if not _vw_mods_sf:
+                return None
+            layer = call_idx % len(_vw_mods_sf)
+            if layer not in _vw_cache_sf:
+                mod = _vw_mods_sf[layer]
+                with _t5.no_grad():
+                    Wt = mod.o.weight.detach().float()
+                    H = mod.num_heads
+                    D = mod.head_dim
+                    Ws, Wis = [], []
+                    for h in range(H):
+                        blk = Wt[:, h * D:(h + 1) * D]
+                        G = blk.t() @ blk
+                        G = G + 1e-3 * G.diagonal().mean() * _t5.eye(D, device=G.device)
+                        lam, U = _t5.linalg.eigh(G)
+                        Ws.append(U @ _t5.diag(lam.clamp_min(1e-8).sqrt()) @ U.t())
+                        Wis.append(U @ _t5.diag(1.0 / lam.clamp_min(1e-8).sqrt()) @ U.t())
+                    _vw_cache_sf[layer] = (_t5.stack(Ws), _t5.stack(Wis))
+            return _vw_cache_sf[layer]
+
+        _pq.set_vw_provider(_vw_provider_sf)
+        print("[pca_launcher] N20 W_O-metric V provider enabled (SF)", flush=True)
     else:
         print("[pca_launcher] PCA_V_METRIC=wo: no provider for this target", flush=True)
 

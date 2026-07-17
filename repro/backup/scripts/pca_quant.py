@@ -608,10 +608,25 @@ def pca_fake_quant_kv(k, v):
             if not getattr(pca_fake_quant_kv, "_vw_announced", False):
                 pca_fake_quant_kv._vw_announced = True
                 print(f"[pca_quant] N20 V<-W_O metric active W{tuple(W.shape)}", flush=True)
-            vw = torch.einsum("bhsd,hde->bhse", v.float(), W.to(v.device))
-            vq = pca_fake_quant(vw, PCA_R if PCA_V_MODE == "pca" else 0)
-            v_q = torch.einsum("bhsd,hde->bhse", vq.float(),
-                               Winv.to(v.device)).to(v.dtype)
+            d = W.shape[-1]
+            if v.shape[-1] == d:
+                vw = torch.einsum("bhsd,hde->bhse", v.float(), W.to(v.device))
+                vq = pca_fake_quant(vw, PCA_R if PCA_V_MODE == "pca" else 0)
+                v_q = torch.einsum("bhsd,hde->bhse", vq.float(),
+                                   Winv.to(v.device)).to(v.dtype)
+            else:
+                # HY packs [v_rope; v_prope] (2d wide): whiten each half with
+                # the same per-head W (both halves feed the same to_out block)
+                B, H, S, D = v.shape
+                n = D // d
+                vv = v.float().reshape(B, H, S, n, d)
+                vw = torch.einsum("bhsnd,hde->bhsne", vv, W.to(v.device))
+                vq = pca_fake_quant(vw.reshape(B, H, S, D),
+                                    PCA_R if PCA_V_MODE == "pca" else 0)
+                vq = torch.einsum("bhsnd,hde->bhsne",
+                                  vq.float().reshape(B, H, S, n, d),
+                                  Winv.to(v.device))
+                v_q = vq.reshape(B, H, S, D).to(v.dtype)
     else:
         v_q = pca_fake_quant(v, PCA_R if PCA_V_MODE == "pca" else 0)
     return k_q, v_q
