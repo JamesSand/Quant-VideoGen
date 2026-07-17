@@ -46,6 +46,15 @@ naive-int2` 被劫持）。**确定性算法**（QVG 的 k-means σ=0.18 dB，N4
 现状为 fake-quant（cache 实存 bf16）：质量结论成立，长度/显存/速度故事需 M1-M3
 kernel 化（[n4-int2-impl-plan.md](n4-int2-impl-plan.md)）。
 
+**速度特性——没有 k-means，只有 PCA**：QVG 的 encode 核心是迭代式 k-means
+（k-means++ 初始化 + 多轮质心更新，LC 官方配置 iters=100，且质心 atomic_add 引入
+非确定性）；N4 的 encode 是**闭式解**——每 (head, chunk) 一次 D×D 协方差 GEMM +
+一次 `eigh` + 两次瘦投影，无迭代、无初始化、确定性。同 chunk 干净对比：N4 朴素
+torch 实现 ≈ QVG iters=100（6.23s vs 6.37s），**比 QVG-Pro 快 3.2×**；QVG 靠流式
+质心缓存（iters=2）目前快我们 23×，但那是工程优化——N4 的对应抓手（低精度协方差
+GEMM、基跨 chunk 热启动）还没做（[kernel-speed.md](kernel-speed.md)）。decode 侧
+双方同为"查表/GEMM + 加法"，均可忽略。
+
 **评测口径**（本日定稿，详见 [metric-matrix.md](metric-matrix.md)）：参考 = 同 seed
 同配置 BF16；SSIM 一律 paper 的 metric.py 实现（11×11 avg_pool——我们之前的"全局
 SSIM"严重虚高，本日勘误，全部数字已重算）；LPIPS 一律 paper 口径（[0,1] 直喂 vgg，
