@@ -25,6 +25,12 @@
 
 ### 闸门③：Self-Forcing VBench Image Quality
 
+> **⚠️ 勘误（0717 深夜）**：本节 N12 的 SF 数字**无效**——SF 生成命令漏了
+> `--quant_type naive-int2`（inference.py 默认 none），实际跑的是**无量化 BF16**
+> （日志 hijack 计数=0，分数与 BF16 一致即为此故）。N12 的闸门③从未被有效检验；
+> N12 已因无 k-means 约束退役，不再补测。教训：**每个量化 run 必须验证 hijack
+> 打印计数>0**（已加入 N19 的 SF 复跑检查项）。
+
 | 方法 | 350f | 700f |
 |---|---:|---:|
 | BF16 | 72.91 | 71.51 |
