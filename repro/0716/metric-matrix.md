@@ -1,8 +1,15 @@
-# 标准评测矩阵：(LC × SF × HY) × (INT2 × INT4) 的 PSNR / SSIM / LPIPS
+# 标准评测矩阵：(LC × HY) × (INT2 × INT4) 的 PSNR / SSIM / LPIPS
 
-> **约定（用户 2026-07-16 定）**：以后所有 PSNR/SSIM/LPIPS 评测按
-> **(LC × SF × HY) × (INT2 × INT4) 六格矩阵**报，不再只报单格。
+> **约定（用户 2026-07-16 定，0717 修订）**：以后所有 PSNR/SSIM/LPIPS 评测按
+> **(LC × HY) × (INT2 × INT4) 四格矩阵**报，不再只报单格。
 > LPIPS 一律 paper 口径（[0,1] 直喂 vgg）。
+>
+> **SF 已从参考三指标矩阵中移除（用户 0717 决定）**：SF 是 T2V、**没有条件前缀**
+> ——量化从第一个 block 就生效，onset 即帧 1，落在 38-39 dB 的近无损区（编码噪声底
+> ~48 dB），方法间拉不开差距（QVG 38.65 vs N4 38.52），判别力太低；且 paper Table 1
+> 本无 SF 行，没有对照锚点。**SF 的质量评测只走 VBench IQ**
+> （[vbench-repro.md](vbench-repro.md)）。历史读数留档于
+> [sf-ref-metrics.md](sf-ref-metrics.md)，不再更新。
 
 ## 各格的既定起点协议
 
@@ -10,7 +17,6 @@
 |---|---|---|
 | LC（INT2/INT4） | 首个生成帧 frame 93 | [0713 report](../0713/report-0713.md)，13/13 match 验证；paper 版 SSIM 下 QVG f93 = 28.73/0.9033 vs paper 28.716/0.909 **双指标精确 match** |
 | HY（INT2/INT4） | **两段协议（用户 0717 定稿）：drop 前 [1,断崖) 与 drop 后 [断崖,末) 分别报三指标 + 断崖帧位置**（断崖=首个 PSNR<28 帧；~~[23,36)~~ 跨崖窗口、~~[0,32)~~ 起点窗口均作废） | [hy-ref-metrics.md](hy-ref-metrics.md)：HY 是平台+断崖结构；INT4 drop 前与 paper 三指标精确吻合，INT2 的 paper 值为跨崖均值形状 |
-| SF（两位宽） | onset 帧（首个 PSNR<40；paper Table 1 **无 SF 行**，故为自建同协议对比） | [sf-ref-metrics.md](sf-ref-metrics.md) |
 
 **SSIM 一律 paper 实现（metric.py 的 11×11 avg_pool 局部窗）**——`sf_ref_metrics.py`
 曾用的全局 SSIM 严重虚高已废（0716 勘误，脚本已修）；受影响 npz 用 `ssim_paper` 键。
@@ -27,7 +33,6 @@ sf-ref-metrics.md §前提 3）。
 | 模型 | QVG（我们） | QVG（paper） | 判定 | N4（我们） |
 |---|---|---|---|---|
 | LC | 28.73 / **0.9033** / 0.089（f93，paper 版 SSIM） | 28.716 / 0.909 / 0.065 | PSNR+SSIM 双 match ✓ | **31.79 / 0.9424 / 0.067**（大胜） |
-| SF | 38.65 / 0.9736 / 0.041（onset） | —（无 SF 行） | — | 38.52 / 0.9730 / 0.043（打平） |
 | HY | drop前 **35.11 / 0.9655 / 0.0544**，drop后 15.79/0.370/0.432（断崖 29） | 29.174 / 0.882 / 0.094¹ | 形状级 match¹ | drop前 31.98 / 0.9439 / 0.0770（**输 3.1 dB**），drop后 15.62/0.380/0.435（断崖同帧 29） |
 
 ### INT4
@@ -35,7 +40,6 @@ sf-ref-metrics.md §前提 3）。
 | 模型 | QVG（我们） | QVG（paper） | PSNR 差 | N4（我们） |
 |---|---|---|---:|---|
 | LC | 33.75 / 0.9535 / 0.056 | 37.141 / 0.978 / 0.024 | −3.39 ⚠² | **空**（需定义 INT4 档配置） |
-| SF | **空**（需生成 195 配置 INT4 视频） | —（无 SF 行） | — | 空 |
 | HY | drop前 **35.14 / 0.9640 / 0.0500**，drop后 19.72/0.664/0.222（断崖 35） | 34.454 / 0.954 / 0.051 | **三指标精确吻合**（+0.7 / +0.010 / −0.001）✓ | 空 |
 
 ¹ paper 的 HY 三元组是**跨崖窗口平均的形状**（我们 [20,32) = 31.1/0.882/0.099，
@@ -67,4 +71,4 @@ SSIM/LPIPS 0.930/0.062 为误抄，PDF 实值 0.954/0.051。
 3. **N4 的 INT4 档定义**：`pca_quant.py` 残差写死 2-bit；需定一个 INT4-class 配置
    （候选：残差 asym 4-bit B128 + coef 4-bit，BPE ≈4.5 vs QVG INT4 的 4.30）——
    研究决策，待讨论
-4. **SF × INT4（QVG + N4）**：需按 195-latent 匹配配置生成 QVG INT4 视频
+4. ~~SF × INT4~~ 取消（SF 已移出参考三指标矩阵，用户 0717 决定）
