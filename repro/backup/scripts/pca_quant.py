@@ -134,10 +134,11 @@ PCA_QW_MODE = os.environ.get("PCA_QW_MODE", "scale")  # "scale" (N5) | "bits" (N
 
 
 def _greedy_bits(w, budget_per_dim=2, bmin=1, bmax=4):
-    """w: [H, D] -> integer bits [H, D], sum per head = budget_per_dim * D."""
+    """w: [H, D] -> integer bits [H, D], sum per head ≈ budget_per_dim * D.
+    budget_per_dim may be fractional (spends the BPE headroom exactly)."""
     H, D = w.shape
     b = torch.full((H, D), bmin, dtype=torch.long, device=w.device)
-    extra = (budget_per_dim - bmin) * D
+    extra = int(round((budget_per_dim - bmin) * D))
     gain = w * (4.0 ** (-bmin))                       # ∝ marginal gain
     for _ in range(extra):
         idx = gain.argmax(dim=-1)                     # [H]
@@ -249,7 +250,7 @@ def _unsplit_d(x, H, D):
 # rows rotate as two 128 halves), per-dim bits by greedy on eigenvalues
 # (budget mean = PCA_KLT_BUDGET, b in [0,4]), quantized per (dim, 128-token
 # block) asym with fp8 scale/zp. BPE: 2 + 0.125 + basis (LC .035/HY .145/SF .027).
-PCA_KLT_BUDGET = int(os.environ.get("PCA_KLT_BUDGET", "2"))
+PCA_KLT_BUDGET = float(os.environ.get("PCA_KLT_BUDGET", "2"))
 PCA_KLT_SPLIT = int(os.environ.get("PCA_KLT_SPLIT", "0"))
 PCA_KLT_SBLOCK = int(os.environ.get("PCA_KLT_SBLOCK", "128"))
 PCA_KLT_GRID = os.environ.get("PCA_KLT_GRID", "uniform")  # "uniform" | "lm"
