@@ -157,10 +157,14 @@ def pca_fake_quant_kv(k, v):
             s = _qw_scale(w.to(k.device, torch.float32))       # native [H, D]
             H, D = k.shape[1], k.shape[-1]
             if s.shape != (H, D):
-                # cache/compress may view heads packed (e.g. HY: model 48x128,
-                # cache 24x256) — scale computed per native head, then re-viewed
-                assert s.numel() == H * D, f"q-stats {tuple(s.shape)} vs k {H}x{D}"
-                s = s.reshape(H, D)
+                if s.shape[0] == H and D % s.shape[1] == 0:
+                    # HY cache stores rope+prope K/V variants concatenated
+                    # (head_dim = model head_dim * 2); both halves map to the
+                    # same underlying dims -> tile the importance scale.
+                    s = s.repeat(1, D // s.shape[1])
+                else:
+                    assert s.numel() == H * D, f"q-stats {tuple(s.shape)} vs k {H}x{D}"
+                    s = s.reshape(H, D)
             if not getattr(pca_fake_quant_kv, "_qw_announced", False):
                 pca_fake_quant_kv._qw_announced = True
                 print(f"[pca_quant] QW active: alpha={PCA_QW_ALPHA} pair={PCA_QW_PAIR or 'none'} "
