@@ -3,11 +3,13 @@
 前情：0717 收官见 [../0717/report-0717.md](../0717/report-0717.md)（Budget-PCA
 三关全胜定稿 + 坐标系理论三次修正证伪）。
 
-## 本日主任务
+## 本日主任务（已完成）
 
-1. **Multi-prompt 复验 campaign**：[multi-prompt-plan.md](multi-prompt-plan.md)
-   ——四个 Q（LC/SF 领先复验、HY 噪声裁决、SF 1400f 分歧、三模型 VBench 新增），
-   ~75 GPU·h，Phase 0 冒烟起步。
+1. **Multi-prompt 复验 campaign**：~420 次生成,基线 + 7 轮优化扫描 + held-out
+   验证。定稿 [multi-prompt-results.md](multi-prompt-results.md),日报
+   [report-0718.md](report-0718.md),交接 [HANDOFF.md](HANDOFF.md),复现
+   [REPRODUCE.md](REPRODUCE.md)。LC/SF 全胜(p=0.011/0.021),HY 参考指标胜、
+   VBench 结构性待仲裁。
 
 ## 从 0717 结转的待办
 
