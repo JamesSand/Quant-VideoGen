@@ -57,7 +57,7 @@ case $KIND in
     esac
     OUT=$OUTD/$P-0/segment_1.mp4 ;;
   sf)
-    P=$A; ARM=$B; REP=${C:-0}; NF=${D:-700}
+    P=$A; ARM=$B; REP=${C:-0}; NF=${D:-180}   # NF is in LATENT frames (must be %3==0); 180 latents = 717px -> VBench700 window
     OUTD=$BASE/sf/${ARM}_rep${REP}_f$NF/p$P
     SFC="--config_path experiments/Self-Forcing/configs/self_forcing_dmd.yaml \
       --checkpoint_path ckpts/Self-Forcing/self_forcing_dmd.pt \
