@@ -26,6 +26,22 @@ QVG_SFHY="--quant_type triton-nstages-kmeans-int2 --quant_block_size 64 --cache_
 pca_env_lc()  { export PCA_R=4 PCA_COEFF_BITS=2 PCA_RES_GRID=asym PCA_V_MODE=pca PCA_RES_BLOCK=128; }
 pca_env_hy()  { pca_env_lc; export PCA_HALF_R_K=9,0 PCA_HALF_R_V=8,1; }
 pca_env_sf()  { export PCA_R=4 PCA_COEFF_BITS=2 PCA_RES_GRID=ternary PCA_V_MODE=pca PCA_RES_BLOCK=64 PCA_SF_STORE_FIX=1; }
+# sweep variants (all BPE-legal; suffix after 'pca'):
+apply_variant() {  # $1 = arm string like pcar6 / pcaa128 / pcavmean / pcar6vmean / pcav90 / pcav00
+  case $1 in
+    *r6*)    export PCA_R=6 ;;
+  esac
+  case $1 in
+    *a128*)  export PCA_RES_GRID=asym PCA_RES_BLOCK=128 ;;
+  esac
+  case $1 in
+    *vmean*) export PCA_V_MODE=mean ;;
+  esac
+  case $1 in
+    *v90*)   export PCA_HALF_R_V=9,0 ;;
+    *v00*)   export PCA_HALF_R_V=0,0 ;;
+  esac
+}
 
 IFS=: read -r KIND A B C D <<< "$JOB"
 t0=$(date +%s)
@@ -50,7 +66,7 @@ case $KIND in
               experiments/LongCat/run_long_t2v.py $LCC --quant_type none > $LOG 2>&1; RC=$? ;;
       qvg)  PYTHONPATH=experiments/LongCat torchrun --nproc_per_node=1 --standalone \
               experiments/LongCat/run_long_t2v.py $LCC $QVG_LC > $LOG 2>&1; RC=$? ;;
-      pca)  pca_env_lc
+      pca*) pca_env_lc; apply_variant $ARM
             PCA_TARGET=experiments/LongCat/run_long_t2v.py PYTHONPATH=experiments/LongCat \
               torchrun --nproc_per_node=1 --standalone repro/backup/scripts/pca_launcher.py \
               $LCC --quant_type naive-int2 --quant_block_size 64 > $LOG 2>&1; RC=$? ;;
@@ -68,7 +84,7 @@ case $KIND in
               experiments/Self-Forcing/inference.py $SFC --quant_type none > $LOG 2>&1; RC=$? ;;
       qvg)  PYTHONPATH=experiments/Self-Forcing:. torchrun --nproc_per_node=1 --standalone \
               experiments/Self-Forcing/inference.py $SFC $QVG_SFHY > $LOG 2>&1; RC=$? ;;
-      pca)  pca_env_sf
+      pca*) pca_env_sf; apply_variant $ARM
             PCA_TARGET=experiments/Self-Forcing/inference.py PYTHONPATH=experiments/Self-Forcing:. \
               torchrun --nproc_per_node=1 --standalone repro/backup/scripts/pca_launcher.py \
               $SFC --quant_type naive-int2 --quant_block_size 64 > $LOG 2>&1; RC=$? ;;
@@ -103,7 +119,7 @@ case $KIND in
               --offload_text_encoder --out $OUTD --seed $S \
               --memory_frames 48 --temporal_context_size 44 --pred_latent_size 4 \
               $QVG_SFHY > $LOG 2>&1; RC=$? ;;
-      pca)  pca_env_hy
+      pca*) pca_env_hy; apply_variant $ARM
             PCA_TARGET=experiments/HY-WorldPlay/wan/generate.py \
               PYTHONPATH=experiments/HY-WorldPlay:experiments/HY-WorldPlay/wan \
               torchrun --nproc_per_node=1 --standalone repro/backup/scripts/pca_launcher.py \
