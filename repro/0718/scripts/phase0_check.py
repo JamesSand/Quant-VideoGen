@@ -29,9 +29,9 @@ def first(pat):
 lc_ref = first("results/multiprompt/lc/bf16_rep0/p1/*/segment_1.mp4")
 lc_qvg = first("results/multiprompt/lc/qvg_rep0/p1/*/segment_1.mp4")
 lc_pca = first("results/multiprompt/lc/pca_rep0/p1/*/segment_1.mp4")
-sf_ref = first("results/multiprompt/sf/bf16_rep0_f700/p1/*.mp4")
-sf_qvg = first("results/multiprompt/sf/qvg_rep0_f700/p1/*.mp4")
-sf_pca = first("results/multiprompt/sf/pca_rep0_f700/p1/*.mp4")
+sf_ref = first("results/multiprompt/sf/bf16_rep0_f180/p1/*.mp4")
+sf_qvg = first("results/multiprompt/sf/qvg_rep0_f180/p1/*.mp4")
+sf_pca = first("results/multiprompt/sf/pca_rep0_f180/p1/*.mp4")
 hy_ref = "results/multiprompt/hy/bf16_s0/0-0.mp4"
 hy_qvg = "results/multiprompt/hy/qvg_s0/0-0.mp4"
 hy_pca = "results/multiprompt/hy/pca_s0/0-0.mp4"
