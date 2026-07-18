@@ -306,6 +306,7 @@ class WanRunner:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--num_frames", type=int, default=961)
+    parser.add_argument("--seed", type=int, default=0, help="Generation seed (was hardcoded 0)")
     parser.add_argument("--num_inference_steps", type=int, default=50)
     parser.add_argument(
         "--input",
@@ -443,7 +444,7 @@ if __name__ == "__main__":
     try:
         # Run inference
         for i, input_data in enumerate(parsed_inputs):
-            seed_idx = 0
+            seed_idx = args.seed
             if rank == 0:
                 output_filename = f"{i}-{seed_idx}.mp4"
                 output_path = os.path.join(save_dir, output_filename)

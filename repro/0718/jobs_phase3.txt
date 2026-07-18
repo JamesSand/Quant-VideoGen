@@ -1,0 +1,12 @@
+hy:1:bf16
+hy:1:qvg
+hy:1:pca
+hy:2:bf16
+hy:2:qvg
+hy:2:pca
+hy:3:bf16
+hy:3:qvg
+hy:3:pca
+hy:4:bf16
+hy:4:qvg
+hy:4:pca

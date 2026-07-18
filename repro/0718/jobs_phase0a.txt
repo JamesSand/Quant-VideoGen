@@ -1,0 +1,7 @@
+lc_base:1
+sf:1:bf16:0
+sf:1:qvg:0
+sf:1:pca:0
+hy:0:bf16
+hy:0:qvg
+hy:0:pca
