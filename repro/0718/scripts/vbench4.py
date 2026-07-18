@@ -16,7 +16,7 @@ import torch.nn.functional as F
 import imageio.v3 as iio
 
 os.chdir("/home/zhizhousha/workspace/video-project/Quant-VideoGen")
-CACHE = "repro/0718/npz/vbench4.json"
+CACHE = os.environ.get("VBENCH4_CACHE", "repro/0718/npz/vbench4.json")
 dev = "cuda"
 
 args = [a for a in sys.argv[1:]]
