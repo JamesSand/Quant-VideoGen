@@ -33,6 +33,7 @@ apply_variant() {  # $1 = arm string like pcar6 / pcaa128 / pcavmean / pcar6vmea
   esac
   case $1 in
     *a128*)  export PCA_RES_GRID=asym PCA_RES_BLOCK=128 ;;
+    *kptern128*) export PCA_RES_GRID=asym PCA_RES_BLOCK=128 PCA_RES_GRID_KP=ternary PCA_RES_BLOCK_KP=128 ;;
     *kptern*) export PCA_RES_GRID=asym PCA_RES_BLOCK=128 PCA_RES_GRID_KP=ternary PCA_RES_BLOCK_KP=64 ;;
     *vtern*) export PCA_RES_GRID=asym PCA_RES_BLOCK=128 PCA_RES_GRID_V=ternary PCA_RES_BLOCK_V=64 ;;
     *ktern*) export PCA_RES_GRID=asym PCA_RES_BLOCK=128 PCA_RES_GRID_K=ternary PCA_RES_BLOCK_K=64 ;;
@@ -47,6 +48,9 @@ apply_variant() {  # $1 = arm string like pcar6 / pcaa128 / pcavmean / pcar6vmea
   case $1 in
     *v90*)   export PCA_HALF_R_V=9,0 ;;
     *v00*)   export PCA_HALF_R_V=0,0 ;;
+  esac
+  case $1 in
+    *vptern*) export PCA_RES_GRID_VP=ternary PCA_RES_BLOCK_VP=64 ;;
   esac
 }
 

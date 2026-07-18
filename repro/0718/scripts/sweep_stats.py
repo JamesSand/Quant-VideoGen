@@ -104,7 +104,7 @@ for var in ("pca", "pcaa128", "pcar6", "pcavmean", "pcar6vmean", "pcar6a128"):
 
 # ---------- HY: variants ref-metrics + VBench vs qvg ----------
 print("\n== HY variants (frames[13:] + VBench vs QVG, 5 seeds) ==")
-for var in ("pca", "pcav90", "pcatern", "pcav90vtern", "pcav90ktern"):
+for var in ("pca", "pcav90", "pcatern", "pcav90vtern", "pcav90ktern", "pcav90kptern", "pcav90kpvptern"):
     dp, dv, ds, dl = [], [], [], []
     for s in range(5):
         ref = f"results/multiprompt/hy/bf16_s{s}/0-{s}.mp4"
