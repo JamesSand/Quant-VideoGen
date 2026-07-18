@@ -21,6 +21,26 @@ PCA_KR = int(os.environ.get("PCA_KR", "0")) or None   # K-side rank override
 PCA_VR = int(os.environ.get("PCA_VR", "0")) or None   # V-side rank override
 PCA_COEFF_BITS = int(os.environ.get("PCA_COEFF_BITS", "2"))
 PCA_RES_GRID = os.environ.get("PCA_RES_GRID", "ternary")
+
+import contextlib
+
+@contextlib.contextmanager
+def _res_grid_override(which):
+    """Per-tensor residual grid/block override: PCA_RES_GRID_K/_V, PCA_RES_BLOCK_K/_V.
+    Mixed grids (e.g. K asym + V ternary) stay BPE-legal: ternary counted at 2 bits
+    (QVG-symmetric accounting), block overheads averaged across K/V."""
+    global PCA_RES_GRID, RES_BLOCK
+    g = os.environ.get(f"PCA_RES_GRID_{which}", "")
+    b = os.environ.get(f"PCA_RES_BLOCK_{which}", "")
+    if not g and not b:
+        yield; return
+    prev_g, prev_b = PCA_RES_GRID, RES_BLOCK
+    if g: PCA_RES_GRID = g
+    if b: RES_BLOCK = int(b)
+    try:
+        yield
+    finally:
+        PCA_RES_GRID, RES_BLOCK = prev_g, prev_b
 PCA_V_MODE = os.environ.get("PCA_V_MODE", "mean")
 RES_BLOCK = int(os.environ.get("PCA_RES_BLOCK", "64"))
 K_BASIS_FILE = os.environ.get("PCA_K_BASIS_FILE", "")
@@ -611,9 +631,13 @@ def pca_fake_quant_kv(k, v):
             return torch.cat([a, b], dim=-1)
         if not getattr(pca_fake_quant_kv, "_hr_announced", False):
             pca_fake_quant_kv._hr_announced = True
-            print(f"[pca_quant] half-rank active: K={hrk} V={hrv}", flush=True)
-        k_q = _hq(k, hrk) if hrk else pca_fake_quant(k, PCA_KR or PCA_R)
-        v_q = _hq(v, hrv) if hrv else pca_fake_quant(v, (PCA_VR or PCA_R))
+            print(f"[pca_quant] half-rank active: K={hrk} V={hrv} "
+                  f"gridK={os.environ.get('PCA_RES_GRID_K','-')} "
+                  f"gridV={os.environ.get('PCA_RES_GRID_V','-')}", flush=True)
+        with _res_grid_override("K"):
+            k_q = _hq(k, hrk) if hrk else pca_fake_quant(k, PCA_KR or PCA_R)
+        with _res_grid_override("V"):
+            v_q = _hq(v, hrv) if hrv else pca_fake_quant(v, (PCA_VR or PCA_R))
         return k_q, v_q
     # OSCAR-style BF16 sink window: first PCA_SINK_T tokens of event 0 stay
     # full precision (literature-standard; amortized in BPE accounting).

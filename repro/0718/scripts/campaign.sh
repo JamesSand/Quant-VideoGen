@@ -33,6 +33,8 @@ apply_variant() {  # $1 = arm string like pcar6 / pcaa128 / pcavmean / pcar6vmea
   esac
   case $1 in
     *a128*)  export PCA_RES_GRID=asym PCA_RES_BLOCK=128 ;;
+    *vtern*) export PCA_RES_GRID=asym PCA_RES_BLOCK=128 PCA_RES_GRID_V=ternary PCA_RES_BLOCK_V=64 ;;
+    *ktern*) export PCA_RES_GRID=asym PCA_RES_BLOCK=128 PCA_RES_GRID_K=ternary PCA_RES_BLOCK_K=64 ;;
     *tern*)  export PCA_RES_GRID=ternary PCA_RES_BLOCK=64 ;;
   esac
   case $1 in

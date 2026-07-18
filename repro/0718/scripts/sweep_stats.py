@@ -66,7 +66,7 @@ def sign_test(diffs, direction=1):
 
 # ---------- LC: variants vs qvg on f93 ----------
 print("== LC variants (f93 PSNR vs QVG mean-of-3) ==")
-for var in ("pca", "pcar6"):
+for var in ("pca", "pcar6", "pcar8"):
     diffs, p9val = [], None
     for p in range(1, 11):
         ref = glob.glob(f"results/multiprompt/lc/bf16_rep0/p{p}/*/segment_1.mp4")
@@ -87,15 +87,15 @@ for var in ("pca", "pcar6"):
 # ---------- SF: variants VBench700 vs qvg ----------
 print("\n== SF variants (VBench700 vs QVG mean-of-3) ==")
 qvg700 = {}
-for p in range(1, 11):
+for p in range(1, 21):
     vals = []
     for r in range(3):
         g = glob.glob(f"results/multiprompt/sf/qvg_rep{r}_f180/p{p}/*.mp4")
         if g: vals.append(vbench(g[0])["700"])
     if vals: qvg700[p] = np.mean(vals)
-for var in ("pca", "pcaa128", "pcar6", "pcavmean", "pcar6vmean"):
+for var in ("pca", "pcaa128", "pcar6", "pcavmean", "pcar6vmean", "pcar6a128"):
     diffs = []
-    for p in range(1, 11):
+    for p in range(1, 21):
         g = glob.glob(f"results/multiprompt/sf/{var}_rep0_f180/p{p}/*.mp4")
         if g and p in qvg700: diffs.append(vbench(g[0])["700"] - qvg700[p])
     if not diffs: print(f"{var}: no data"); continue
@@ -104,7 +104,7 @@ for var in ("pca", "pcaa128", "pcar6", "pcavmean", "pcar6vmean"):
 
 # ---------- HY: variants ref-metrics + VBench vs qvg ----------
 print("\n== HY variants (frames[13:] + VBench vs QVG, 5 seeds) ==")
-for var in ("pca", "pcav90", "pcav00"):
+for var in ("pca", "pcav90", "pcav00", "pcatern"):
     dp, dv, ds, dl = [], [], [], []
     for s in range(5):
         ref = f"results/multiprompt/hy/bf16_s{s}/0-{s}.mp4"

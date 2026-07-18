@@ -1,0 +1,20 @@
+/home/zhizhousha/workspace/video-project/Quant-VideoGen/.venv/lib/python3.12/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.
+/home/zhizhousha/workspace/video-project/Quant-VideoGen/.venv/lib/python3.12/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=VGG16_Weights.IMAGENET1K_V1`. You can also use `weights=VGG16_Weights.DEFAULT` to get the most up-to-date weights.
+== LC variants (f93 PSNR vs QVG mean-of-3) ==
+pca: mean Δ +1.400 ± 2.790, win 9/10, p=0.0107, p9 f93=(21.52062923168726, -6.193787407226278)
+pcar6: mean Δ +1.706 ± 1.958, win 9/10, p=0.0107, p9 f93=(24.3309335546816, -3.383483084231937)
+pcar8: mean Δ +2.165 ± 3.183, win 9/10, p=0.0107, p9 f93=(21.115547162413755, -6.598869476499782)
+
+== SF variants (VBench700 vs QVG mean-of-3) ==
+pca: mean Δ -1.460 ± 2.567, win 3/10, p=0.9453
+pcaa128: mean Δ +0.526 ± 1.604, win 15/20, p=0.0207
+pcar6: mean Δ -1.738 ± 2.545, win 2/10, p=0.9893
+pcavmean: mean Δ -4.126 ± 4.496, win 2/10, p=0.9893
+pcar6vmean: mean Δ -3.121 ± 3.871, win 2/10, p=0.9893
+pcar6a128: mean Δ +0.457 ± 1.565, win 7/10, p=0.1719
+
+== HY variants (frames[13:] + VBench vs QVG, 5 seeds) ==
+pca: ΔPSNR +0.176 (win 4/5)  ΔSSIM +0.0176 (5/5)  ΔLPIPS -0.0083 (4/5)  ΔVB -1.16 (0/5)
+pcav90: ΔPSNR +0.247 (win 4/5)  ΔSSIM +0.0253 (5/5)  ΔLPIPS -0.0139 (4/5)  ΔVB -1.04 (0/5)
+pcav00: ΔPSNR +0.099 (win 3/5)  ΔSSIM +0.0197 (5/5)  ΔLPIPS -0.0097 (5/5)  ΔVB -1.28 (0/5)
+pcatern: ΔPSNR -0.445 (win 1/5)  ΔSSIM -0.0230 (0/5)  ΔLPIPS +0.0296 (0/5)  ΔVB +0.11 (3/5)
