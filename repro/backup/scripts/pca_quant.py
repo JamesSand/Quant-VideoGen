@@ -624,10 +624,12 @@ def pca_fake_quant_kv(k, v):
     hrk = os.environ.get("PCA_HALF_R_K", "") or hr
     hrv = os.environ.get("PCA_HALF_R_V", "") or hr
     if (hrk or hrv) and k.shape[-1] == 256:
-        def _hq(t, spec):
+        def _hq(t, spec, which=""):
             r1, r2 = (int(x) for x in spec.split(","))
             a = pca_fake_quant(t[..., :128].contiguous(), r1)
-            b = pca_fake_quant(t[..., 128:].contiguous(), r2)
+            # per-half residual grid: PCA_RES_GRID_{K,V}P overrides the PROPE half only
+            with _res_grid_override(which + "P"):
+                b = pca_fake_quant(t[..., 128:].contiguous(), r2)
             return torch.cat([a, b], dim=-1)
         if not getattr(pca_fake_quant_kv, "_hr_announced", False):
             pca_fake_quant_kv._hr_announced = True
@@ -635,9 +637,9 @@ def pca_fake_quant_kv(k, v):
                   f"gridK={os.environ.get('PCA_RES_GRID_K','-')} "
                   f"gridV={os.environ.get('PCA_RES_GRID_V','-')}", flush=True)
         with _res_grid_override("K"):
-            k_q = _hq(k, hrk) if hrk else pca_fake_quant(k, PCA_KR or PCA_R)
+            k_q = _hq(k, hrk, "K") if hrk else pca_fake_quant(k, PCA_KR or PCA_R)
         with _res_grid_override("V"):
-            v_q = _hq(v, hrv) if hrv else pca_fake_quant(v, (PCA_VR or PCA_R))
+            v_q = _hq(v, hrv, "V") if hrv else pca_fake_quant(v, (PCA_VR or PCA_R))
         return k_q, v_q
     # OSCAR-style BF16 sink window: first PCA_SINK_T tokens of event 0 stay
     # full precision (literature-standard; amortized in BPE accounting).
