@@ -43,6 +43,15 @@ PCA/各向异性整形（KIVI、OSCAR，其校准脚本自注 "Dump post-RoPE Q/
 pre-RoPE、读取时确定性重转）。"pre-RoPE caching 是为覆盖动态坐标系"的说法
 不成立——三条管线的量化 K 语义全部等价于 LLM 情形。
 
+**QVG 的 paper-代码不一致（0718 补充）**：QVG paper p8 声称统一 "adopt pre-RoPE
+key caching for more quantization-friendly key distributions (Hooper et al.,
+2024)"（= KVQuant 的分布友好论证，与坐标系无关），**无任何 per-model 例外
+声明**；但其 HY 实现的 `quantize_kv_cache` 作用在 post-rope‖post-prope 的 cache
+上——paper 叙述与 HY 代码不符。对我们的含义：①HY 上 QVG 自己也没享受到它引用
+的 pre-RoPE 分布红利，双方同在 post-transform 空间竞争，记账与比较依旧公平；
+②我们 HY 的半区秩杠杆恰恰**依赖** post-transform 打包才存在——这不是我们的
+额外优势，而是双方共享的同一接口。
+
 ## 三、"relative rope" 是设计意图，不是评测现实
 
 文件名里的 relative 指上游 HY 的 reconstituted context memory 设计（paper
