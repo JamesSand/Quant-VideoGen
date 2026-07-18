@@ -500,9 +500,35 @@ def _subchunk_apply(x, fn, n):
     return torch.cat([fn(x[:, :, cuts[i]:cuts[i + 1]]) for i in range(n)], dim=2)
 
 
+def _kivi_fake_quant_kv(k, v):
+    """KIVI baseline (Liu et al. 2024) core mechanism: K quantized PER-CHANNEL
+    (asym 2-bit, groups of 128 along the token axis), V PER-TOKEN (asym 2-bit,
+    groups of 64 along channels). The FP16 recent-window of KIVI corresponds to
+    the pipelines' native BF16 recent window (aged-chunk quantization)."""
+    kt = k.transpose(-1, -2).contiguous()          # [B,H,D,S]
+    S = kt.shape[-1]
+    g = next((c for c in (128, 96, 64, 48, 32, 16, 8) if S % c == 0), S)
+    k_q = _asym_quant_lastdim_grouped(kt, 2, g, mse_opt=False).transpose(-1, -2).contiguous()
+    v_q = _asym_quant_lastdim_grouped(v, 2, 64, mse_opt=False)
+    return k_q.to(k.dtype), v_q.to(v.dtype)
+
+
 def pca_fake_quant_kv(k, v):
     call_idx = _QW_CTR[0]
     _QW_CTR[0] += 1
+    if os.environ.get("PCA_KIVI", "") == "1":
+        if not getattr(pca_fake_quant_kv, "_kivi_announced", False):
+            pca_fake_quant_kv._kivi_announced = True
+            print("[pca_quant] KIVI baseline mode: K per-channel g128 / V per-token g64", flush=True)
+        return _kivi_fake_quant_kv(k, v)
+    if os.environ.get("PCA_RTN", "") == "1":
+        # RTN baseline: plain per-token blockwise asym 2-bit (== fork's naive-int2
+        # math), routed through this launcher for the SF BSHD store fix.
+        if not getattr(pca_fake_quant_kv, "_rtn_announced", False):
+            pca_fake_quant_kv._rtn_announced = True
+            print("[pca_quant] RTN baseline mode: asym 2-bit B64 per-token", flush=True)
+        return (_asym_quant_lastdim_grouped(k, 2, 64, mse_opt=False).to(k.dtype),
+                _asym_quant_lastdim_grouped(v, 2, 64, mse_opt=False).to(v.dtype))
     if PCA_EVENT_SCHED and PCA_N_LAYERS > 0:
         _EVENT_IDX[0] = call_idx // PCA_N_LAYERS
         if call_idx % PCA_N_LAYERS == 0:

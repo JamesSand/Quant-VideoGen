@@ -12,11 +12,12 @@ JOB=${1:?job spec}
 cd /home/zhizhousha/workspace/video-project/Quant-VideoGen
 . .venv/bin/activate
 . repro/backup/scripts/env_fix.sh
-PROMPTS=repro/0718/prompts/selected.txt
-BASE=results/multiprompt
+PROMPTS=${CAMPAIGN_PROMPTS:-repro/0718/prompts/selected.txt}
+BASE=results/multiprompt${CAMPAIGN_NS:+/$CAMPAIGN_NS}
 LOGD=repro/0718/logs; mkdir -p $LOGD
 TAG=$(echo "$JOB" | tr ':,' '__')
-export TRITON_CACHE_DIR=$PWD/repro/backup/triton_cache/mp_$TAG
+# pod-local per-GPU triton cache: no quota usage, one writer per cache (race-free)
+export TRITON_CACHE_DIR=/tmp/qvg_triton/gpu${CUDA_VISIBLE_DEVICES:-x}
 mkdir -p $TRITON_CACHE_DIR
 LOG=$LOGD/$TAG.log
 
@@ -68,6 +69,11 @@ case $KIND in
     RC=$?; OUT=$BASE/lc/base/$P-0.mp4 ;;
   lc)
     P=$A; ARM=$B; REP=${C:-0}
+    _w=0
+    until [ -f $BASE/lc/base/$P-0.mp4 ]; do
+      sleep 60; _w=$((_w+60))
+      [ $_w -ge 10800 ] && { echo "$JOB BASEWAIT-TIMEOUT" >> repro/0718/logs/ledger_$(hostname -s).txt; exit 3; }
+    done
     OUTD=$BASE/lc/${ARM}_rep$REP/p$P
     LCC="--checkpoint_dir=ckpts/LongCat-Video --workload 480p_long_gen \
       --init_video_path $BASE/lc/base/$P-0.mp4 --num_segments 1 --num_cond_frames 73 \
@@ -78,6 +84,14 @@ case $KIND in
               experiments/LongCat/run_long_t2v.py $LCC --quant_type none > $LOG 2>&1; RC=$? ;;
       qvg)  PYTHONPATH=experiments/LongCat torchrun --nproc_per_node=1 --standalone \
               experiments/LongCat/run_long_t2v.py $LCC $QVG_LC > $LOG 2>&1; RC=$? ;;
+      rtn|kivi) [ "$ARM" = rtn ] && export PCA_RTN=1 || export PCA_KIVI=1
+            PCA_TARGET=experiments/LongCat/run_long_t2v.py PYTHONPATH=experiments/LongCat \
+              torchrun --nproc_per_node=1 --standalone repro/backup/scripts/pca_launcher.py \
+              $LCC --quant_type naive-int2 --quant_block_size 64 > $LOG 2>&1; RC=$? ;;
+      quarot) QUAROT_BLOCK=64 QUAROT_SYM=0 QUAROT_ROTATE_K=1 QUAROT_ROTATE_V=1 \
+            QUAROT_TARGET=experiments/LongCat/run_long_t2v.py PYTHONPATH=experiments/LongCat \
+              torchrun --nproc_per_node=1 --standalone repro/backup/scripts/quarot_launcher.py \
+              $LCC --quant_type naive-int2 --quant_block_size 64 > $LOG 2>&1; RC=$? ;;
       pca*) pca_env_lc; apply_variant $ARM
             PCA_TARGET=experiments/LongCat/run_long_t2v.py PYTHONPATH=experiments/LongCat \
               torchrun --nproc_per_node=1 --standalone repro/backup/scripts/pca_launcher.py \
@@ -89,13 +103,22 @@ case $KIND in
     OUTD=$BASE/sf/${ARM}_rep${REP}_f$NF/p$P
     SFC="--config_path experiments/Self-Forcing/configs/self_forcing_dmd.yaml \
       --checkpoint_path ckpts/Self-Forcing/self_forcing_dmd.pt \
-      --data_path repro/0718/prompts/p$P.txt --output_folder $OUTD \
+      --data_path ${CAMPAIGN_SF_DIR:-repro/0718/prompts}/p$P.txt --output_folder $OUTD \
       --num_samples 1 --num_output_frames $NF --local_attn_size 195 --use_ema --seed 0 --save_with_index"
     case $ARM in
       bf16) PYTHONPATH=experiments/Self-Forcing:. torchrun --nproc_per_node=1 --standalone \
               experiments/Self-Forcing/inference.py $SFC --quant_type none > $LOG 2>&1; RC=$? ;;
       qvg)  PYTHONPATH=experiments/Self-Forcing:. torchrun --nproc_per_node=1 --standalone \
               experiments/Self-Forcing/inference.py $SFC $QVG_SFHY > $LOG 2>&1; RC=$? ;;
+      rtn|kivi) [ "$ARM" = rtn ] && export PCA_RTN=1 || export PCA_KIVI=1
+            export PCA_SF_STORE_FIX=1
+            PCA_TARGET=experiments/Self-Forcing/inference.py PYTHONPATH=experiments/Self-Forcing:. \
+              torchrun --nproc_per_node=1 --standalone repro/backup/scripts/pca_launcher.py \
+              $SFC --quant_type naive-int2 --quant_block_size 64 > $LOG 2>&1; RC=$? ;;
+      quarot) QUAROT_BLOCK=64 QUAROT_SYM=0 QUAROT_ROTATE_K=1 QUAROT_ROTATE_V=1 QUAROT_SF_STORE_FIX=1 \
+            QUAROT_TARGET=experiments/Self-Forcing/inference.py PYTHONPATH=experiments/Self-Forcing:. \
+              torchrun --nproc_per_node=1 --standalone repro/backup/scripts/quarot_launcher.py \
+              $SFC --quant_type naive-int2 --quant_block_size 64 > $LOG 2>&1; RC=$? ;;
       pca*) pca_env_sf; apply_variant $ARM
             PCA_TARGET=experiments/Self-Forcing/inference.py PYTHONPATH=experiments/Self-Forcing:. \
               torchrun --nproc_per_node=1 --standalone repro/backup/scripts/pca_launcher.py \
@@ -131,6 +154,26 @@ case $KIND in
               --offload_text_encoder --out $OUTD --seed $S \
               --memory_frames 48 --temporal_context_size 44 --pred_latent_size 4 \
               $QVG_SFHY > $LOG 2>&1; RC=$? ;;
+      rtn|kivi) [ "$ARM" = rtn ] && export PCA_RTN=1 || export PCA_KIVI=1
+            PCA_TARGET=experiments/HY-WorldPlay/wan/generate.py \
+              PYTHONPATH=experiments/HY-WorldPlay:experiments/HY-WorldPlay/wan \
+              torchrun --nproc_per_node=1 --standalone repro/backup/scripts/pca_launcher.py \
+              --input "$PROMPT" --image_path assets/hyworld.png --num_chunk 11 --pose "$POSE" \
+              --ar_model_path ckpts/HY-WorldPlay/wan_transformer \
+              --ckpt_path ckpts/HY-WorldPlay/wan_distilled_model/model.pt \
+              --offload_text_encoder --out $OUTD --seed $S \
+              --memory_frames 48 --temporal_context_size 44 --pred_latent_size 4 \
+              --quant_type naive-int2 --quant_block_size 64 > $LOG 2>&1; RC=$? ;;
+      quarot) QUAROT_BLOCK=64 QUAROT_SYM=0 QUAROT_ROTATE_K=1 QUAROT_ROTATE_V=1 \
+            QUAROT_TARGET=experiments/HY-WorldPlay/wan/generate.py \
+              PYTHONPATH=experiments/HY-WorldPlay:experiments/HY-WorldPlay/wan \
+              torchrun --nproc_per_node=1 --standalone repro/backup/scripts/quarot_launcher.py \
+              --input "$PROMPT" --image_path assets/hyworld.png --num_chunk 11 --pose "$POSE" \
+              --ar_model_path ckpts/HY-WorldPlay/wan_transformer \
+              --ckpt_path ckpts/HY-WorldPlay/wan_distilled_model/model.pt \
+              --offload_text_encoder --out $OUTD --seed $S \
+              --memory_frames 48 --temporal_context_size 44 --pred_latent_size 4 \
+              --quant_type naive-int2 --quant_block_size 64 > $LOG 2>&1; RC=$? ;;
       pca*) pca_env_hy; apply_variant $ARM
             PCA_TARGET=experiments/HY-WorldPlay/wan/generate.py \
               PYTHONPATH=experiments/HY-WorldPlay:experiments/HY-WorldPlay/wan \
@@ -152,7 +195,7 @@ STATUS=OK
 [ $RC -ne 0 ] && STATUS=FAIL
 [ ! -f "${OUT:-/nonexistent}" ] && STATUS=NOFILE
 # hygiene: pca arms must show hijack>0
-case "$JOB" in *:pca*|*pca:*) [ "${HIJACK:-0}" -eq 0 ] && STATUS=NOHIJACK ;; esac
-echo "$JOB $STATUS rc=$RC wall=${WALL}s hijack=$HIJACK out=$OUT" >> repro/0718/logs/ledger.txt
+case "$JOB" in *:pca*|*pca:*|*:rtn*|*:kivi*) [ "${HIJACK:-0}" -eq 0 ] && STATUS=NOHIJACK ;; esac
+echo "$JOB $STATUS rc=$RC wall=${WALL}s hijack=$HIJACK out=$OUT" >> repro/0718/logs/ledger_$(hostname -s).txt
 echo "$JOB $STATUS rc=$RC wall=${WALL}s hijack=$HIJACK"
 [ "$STATUS" = OK ]

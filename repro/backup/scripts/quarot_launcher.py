@@ -20,6 +20,20 @@ import re
 import runpy
 import sys
 
+# SF upstream inconsistency (ported from pca_launcher): store_quantized forwards
+# BHSD to write() which expects BSHD. Enable with QUAROT_SF_STORE_FIX=1.
+if os.environ.get("QUAROT_SF_STORE_FIX", "0") == "1":
+    import torch as _torch
+    import quant_videogen.kv_cache as _kvc
+    _orig_store = _kvc.ChunkedKVCache.store_quantized
+    def _store_fix(self, start_index, end_index, quant_data):
+        if _torch.is_tensor(quant_data):
+            return self.write(start_index, end_index,
+                              quant_data.permute(0, 2, 1, 3).contiguous())
+        return _orig_store(self, start_index, end_index, quant_data)
+    _kvc.ChunkedKVCache.store_quantized = _store_fix
+
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 if os.environ.get("QUAROT_DISABLE", "0") != "1":

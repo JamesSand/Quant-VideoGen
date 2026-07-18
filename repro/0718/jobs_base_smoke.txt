@@ -1,0 +1,9 @@
+lc:1:rtn:0
+sf:1:rtn:0
+hy:0:rtn
+lc:1:kivi:0
+sf:1:kivi:0
+hy:0:kivi
+lc:1:quarot:0
+sf:1:quarot:0
+hy:0:quarot
