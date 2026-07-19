@@ -81,14 +81,18 @@ def _qp_tern(tb):
 
 @_maybe_compile
 def _dq_full_ch(packed, sc, zp, ternary: bool, g: int, L: int,
-                mu, c_hat, basis, f_sc: float = 1.0, f_zp: float = 1.0):
+                mu, c_hat, basis, f_sc, f_zp):
     """channel-axis fused decode: unpack -> dequant -> crop -> transpose ->
     + mu + c_hat @ basis^T, all in one compiled graph. Returns [BH,S,D] f32."""
     c = torch.stack([(packed >> (2 * i)) & 3 for i in range(4)], dim=-1)
     codes = c.reshape(*packed.shape[:-1], packed.shape[-1] * 4).float()
     codes = codes.reshape(*codes.shape[:-1], codes.shape[-1] // g, g)
-    scf = sc.float().unsqueeze(-1) * f_sc
-    res = (codes - 1) * scf if ternary else codes * scf + zp.float().unsqueeze(-1) * f_zp
+    scf = sc.float() * f_sc
+    scf = scf.unsqueeze(-1)
+    if ternary:
+        res = (codes - 1) * scf
+    else:
+        res = codes * scf + (zp.float() * f_zp).unsqueeze(-1)
     res = res.reshape(*res.shape[:-2], -1)[..., :L]           # [BH,D,S]
     out = res.transpose(1, 2) + mu.float()
     if basis is not None:
@@ -167,9 +171,12 @@ def _get_encode_core(grid, axis, r, block, iters=5):
             pad = (block - L % block) % block
             t3 = torch.nn.functional.pad(t2, (0, pad))
             tb = t3.reshape(t2.shape[0], t2.shape[1], -1, block)
+            _dims = (-2, -1) if axis == "channel" else None
+            def _fmax(t):
+                return (t.abs().amax(dim=_dims, keepdim=True) if _dims else t.abs().amax()).clamp_min(1e-12)
             if grid == "ternary":
                 sc0 = tb.abs().amax(-1, keepdim=True).clamp_min(1e-8)
-                f_sc = sc0.amax().clamp_min(1e-8)
+                f_sc = _fmax(sc0)
                 sc = ((sc0 / f_sc).to(FP8).float() * f_sc).clamp_min(1e-8)
                 qv = (torch.clamp(torch.round(tb / sc), -1, 1) + 1).to(torch.uint8)
                 zp8 = None
@@ -177,9 +184,9 @@ def _get_encode_core(grid, axis, r, block, iters=5):
             else:
                 mn2 = tb.amin(-1, keepdim=True); mx2 = tb.amax(-1, keepdim=True)
                 sc0 = ((mx2 - mn2) / 3).clamp_min(1e-8)
-                f_sc = sc0.amax().clamp_min(1e-8)
+                f_sc = _fmax(sc0)
                 sc = ((sc0 / f_sc).to(FP8).float() * f_sc).clamp_min(1e-8)
-                f_zp = mn2.abs().amax().clamp_min(1e-8)
+                f_zp = _fmax(mn2)
                 zp = (mn2 / f_zp).to(FP8).float() * f_zp
                 qv = torch.clamp(torch.round((tb - zp) / sc), 0, 3).to(torch.uint8)
                 zp8 = (zp / f_zp).squeeze(-1).to(FP8)
@@ -216,9 +223,12 @@ def _get_encode_core(grid, axis, r, block, iters=5):
         pad = (block - L % block) % block
         t3 = torch.nn.functional.pad(t2, (0, pad))
         tb = t3.reshape(t2.shape[0], t2.shape[1], -1, block)
+        _dims = (-2, -1) if axis == "channel" else None
+        def _fmax(t):
+            return (t.abs().amax(dim=_dims, keepdim=True) if _dims else t.abs().amax()).clamp_min(1e-12)
         if grid == "ternary":
             sc0 = tb.abs().amax(-1, keepdim=True).clamp_min(1e-8)
-            f_sc = sc0.amax().clamp_min(1e-8)
+            f_sc = _fmax(sc0)
             sc = ((sc0 / f_sc).to(FP8).float() * f_sc).clamp_min(1e-8)
             q = (torch.clamp(torch.round(tb / sc), -1, 1) + 1).to(torch.uint8)
             zp8 = None
@@ -226,9 +236,9 @@ def _get_encode_core(grid, axis, r, block, iters=5):
         else:
             mn2 = tb.amin(-1, keepdim=True); mx2 = tb.amax(-1, keepdim=True)
             sc0 = ((mx2 - mn2) / 3).clamp_min(1e-8)
-            f_sc = sc0.amax().clamp_min(1e-8)
+            f_sc = _fmax(sc0)
             sc = ((sc0 / f_sc).to(FP8).float() * f_sc).clamp_min(1e-8)
-            f_zp = mn2.abs().amax().clamp_min(1e-8)
+            f_zp = _fmax(mn2)
             zp = (mn2 / f_zp).to(FP8).float() * f_zp
             q = torch.clamp(torch.round((tb - zp) / sc), 0, 3).to(torch.uint8)
             zp8 = (zp / f_zp).squeeze(-1).to(FP8)
@@ -258,17 +268,25 @@ def bp_encode_fast(x, r=4, grid="asym", block=128, axis="token", iters=5):
     pad = (block - L % block) % block
     if r == 0:
         mu, packed, sc8, zp8, f_sc, f_zp = core(x.reshape(B * H, S, D).float())
-        return {"shape": (B, H, S, D), "r": 0, "grid": grid, "block": block, "axis": axis,
-                "mu": mu, "res_pack": packed, "res_scale": sc8, "res_zp": zp8,
-                "res_g": block, "res_pad": pad,
-                "f_sc": float(f_sc), "f_zp": float(f_zp)}
+        d0 = {"shape": (B, H, S, D), "r": 0, "grid": grid, "block": block, "axis": axis,
+              "mu": mu, "res_pack": packed, "res_scale": sc8, "res_zp": zp8,
+              "res_g": block, "res_pad": pad}
+        if axis == "channel":
+            d0["f_sc_t"] = f_sc.reshape(B * H, -1); d0["f_zp_t"] = f_zp.reshape(B * H, -1)
+        else:
+            d0["f_sc"] = float(f_sc); d0["f_zp"] = float(f_zp)
+        return d0
     (mu, V, coef_pack, cs8, cz8, packed, sc8, zp8,
      f_cs, f_cz, f_sc, f_zp) = core(x.reshape(B * H, S, D).float())
     out = {"shape": (B, H, S, D), "r": r, "grid": grid, "block": block, "axis": axis,
            "mu": mu, "basis": V, "coef_pack": coef_pack.reshape(B * H, S, -1),
            "coef_scale": cs8, "coef_zp": cz8,
            "res_pack": packed, "res_scale": sc8, "res_zp": zp8, "res_g": block, "res_pad": pad,
-           "f_cs": float(f_cs), "f_cz": float(f_cz), "f_sc": float(f_sc), "f_zp": float(f_zp)}
+           "f_cs": float(f_cs), "f_cz": float(f_cz)}
+    if axis == "channel":
+        out["f_sc_t"] = f_sc.reshape(B * H, -1); out["f_zp_t"] = f_zp.reshape(B * H, -1)
+    else:
+        out["f_sc"] = float(f_sc); out["f_zp"] = float(f_zp)
     return out
 
 
@@ -349,7 +367,8 @@ def bp_decode(d, dtype=torch.bfloat16):
                           d["res_scale"].reshape(B * H, rows, Lp // g),
                           (d["res_zp"] if not tern else d["res_scale"]).reshape(B * H, rows, Lp // g),
                           tern, g, L, d["mu"], c_hat, d.get("basis"),
-                          d.get("f_sc", 1.0), d.get("f_zp", 1.0))
+                          d["f_sc_t"].float().unsqueeze(-1) if "f_sc_t" in d else d.get("f_sc", 1.0),
+                          d["f_zp_t"].float().unsqueeze(-1) if "f_zp_t" in d else d.get("f_zp", 1.0))
         out = out.reshape(B, H, S, D)
         return out if dtype == torch.bfloat16 else out.to(dtype)
     res = _dq_res(d["res_pack"].reshape(B * H, rows, Lp // 4),

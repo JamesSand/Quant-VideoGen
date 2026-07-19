@@ -65,10 +65,15 @@ PCA_FP8SIM = os.environ.get("PCA_FP8SIM", "0") == "1"
 # M0 precheck: simulate storing quantizer metadata (scale/zero) in fp8 E4M3,
 # exactly as the real-kernel accounting assumes (kernel-plan.md).
 
-def _fp8(t):
-    # normalized fp8 storage: one bf16 factor per tensor (amortized ~0) keeps
-    # values inside E4M3 range (LC deep-layer scales reach ~960 > 448 max).
-    f = t.abs().amax().clamp_min(1e-8)
+def _fp8(t, per_row=False):
+    # normalized fp8 storage. per_row=True (channel-axis residual scales,
+    # t: [BH, D, nblk, 1]): one bf16 factor per channel (amortized ~0) —
+    # LC's cross-channel scale dynamic range exceeds E4M3's 2^18 and a global
+    # factor underflows small-variance channels (the 0720 -3.6dB regression).
+    if per_row:
+        f = t.abs().amax(dim=(-2, -1), keepdim=True).clamp_min(1e-12)
+    else:
+        f = t.abs().amax().clamp_min(1e-12)
     return (t / f).to(torch.float8_e4m3fn).to(t.dtype) * f
 
 PCA_RES_MSEOPT = os.environ.get("PCA_RES_MSEOPT", "0") == "1"
@@ -79,7 +84,7 @@ PCA_RES_MSEOPT = os.environ.get("PCA_RES_MSEOPT", "0") == "1"
 _MSE_RATIOS = (1.0, 0.92, 0.85, 0.78, 0.70, 0.62)
 
 
-def _asym_quant_lastdim_grouped(x, bits, group, mse_opt=None):
+def _asym_quant_lastdim_grouped(x, bits, group, mse_opt=None, fp8_per_row=False):
     """Asymmetric fake-quant with one (scale, zero) per group along the last dim."""
     if mse_opt is None:
         mse_opt = PCA_RES_MSEOPT
@@ -90,8 +95,8 @@ def _asym_quant_lastdim_grouped(x, bits, group, mse_opt=None):
     if not mse_opt:
         scale = ((mx - mn) / (2 ** bits - 1)).clamp_min(1e-8)
         if PCA_FP8SIM:
-            scale = _fp8(scale).clamp_min(1e-8)
-            mn = _fp8(mn)
+            scale = _fp8(scale, per_row=fp8_per_row).clamp_min(1e-8)
+            mn = _fp8(mn, per_row=fp8_per_row)
         q = torch.clamp(torch.round((xg - mn) / scale), 0, 2 ** bits - 1)
         return (q * scale + mn).reshape(S)
     ctr = (mx + mn) / 2
@@ -113,13 +118,13 @@ def _asym_quant_lastdim_grouped(x, bits, group, mse_opt=None):
     return best.reshape(S)
 
 
-def _ternary_quant_blocked(x, block):
+def _ternary_quant_blocked(x, block, fp8_per_row=False):
     """QVG-aligned symmetric ternary over blocks of `block` along the last dim."""
     S = x.shape
     xb = x.reshape(*S[:-1], S[-1] // block, block)
     scale = xb.abs().amax(dim=-1, keepdim=True).clamp_min(1e-8)  # max_int = 1
     if PCA_FP8SIM:
-        scale = _fp8(scale).clamp_min(1e-8)
+        scale = _fp8(scale, per_row=fp8_per_row).clamp_min(1e-8)
     q = torch.clamp(torch.round(xb / scale), -1, 1)
     return (q * scale).reshape(S)
 
@@ -170,8 +175,8 @@ def _quant_residual(x, _chnorm_done=False):
         pad = (g - S_ % g) % g
         if pad:
             xt = torch.nn.functional.pad(xt, (0, pad))
-        q = (_ternary_quant_blocked(xt, g) if PCA_RES_GRID == "ternary"
-             else _asym_quant_lastdim_grouped(xt, 2, g))
+        q = (_ternary_quant_blocked(xt, g, fp8_per_row=True) if PCA_RES_GRID == "ternary"
+             else _asym_quant_lastdim_grouped(xt, 2, g, fp8_per_row=True))
         if pad:
             q = q[..., :S_]
         return q.transpose(-1, -2).contiguous()

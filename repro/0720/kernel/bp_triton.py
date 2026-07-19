@@ -11,7 +11,8 @@ import triton.language as tl
 
 @triton.jit
 def _dq_ch(pack_ptr, sc_ptr, zp_ptr, mu_ptr, chat_ptr, basis_ptr, out_ptr,
-           S, D, SP4, NBLK, F_SC, F_ZP, OD, DOFF, G: tl.constexpr, R: tl.constexpr, TERN: tl.constexpr,
+           fsc_ptr, fzp_ptr,
+           S, D, SP4, NBLK, OD, DOFF, G: tl.constexpr, R: tl.constexpr, TERN: tl.constexpr,
            BS: tl.constexpr, BD: tl.constexpr):
     pb = tl.program_id(0)
     ps = tl.program_id(1)
@@ -28,13 +29,16 @@ def _dq_ch(pack_ptr, sc_ptr, zp_ptr, mu_ptr, chat_ptr, basis_ptr, out_ptr,
     code = ((p >> shift[None, :]) & 3).to(tl.float32)
     blk = offs_s // G
     sc = tl.load(sc_ptr + pb * D * NBLK + offs_d[:, None] * NBLK + blk[None, :],
-                 mask=md[:, None] & ms[None, :], other=1.0).to(tl.float32) * F_SC
+                 mask=md[:, None] & ms[None, :], other=1.0).to(tl.float32)
+    fsc = tl.load(fsc_ptr + pb * D + offs_d, mask=md, other=1.0).to(tl.float32)
+    sc = sc * fsc[:, None]
     if TERN:
         res = (code - 1.0) * sc
     else:
         zp = tl.load(zp_ptr + pb * D * NBLK + offs_d[:, None] * NBLK + blk[None, :],
-                     mask=md[:, None] & ms[None, :], other=0.0).to(tl.float32) * F_ZP
-        res = code * sc + zp
+                     mask=md[:, None] & ms[None, :], other=0.0).to(tl.float32)
+        fzp = tl.load(fzp_ptr + pb * D + offs_d, mask=md, other=1.0).to(tl.float32)
+        res = code * sc + zp * fzp[:, None]
     mu = tl.load(mu_ptr + pb * D + offs_d, mask=md, other=0.0).to(tl.float32)
     acc = res + mu[:, None]
     if R > 0:
@@ -111,10 +115,15 @@ def triton_decode(d, c_hat=None, out=None, d_offset=0, out_D=None):
     chat = c_hat.reshape(BH, S, r).to(torch.float32).contiguous() if r > 0 else mu
     BS, BD = 64, 64
     grid = (BH, triton.cdiv(S, BS), triton.cdiv(D, BD))
-    kern = _dq_ch if ax_ch else _dq_tok
-    kern[grid](pack, sc, zp, mu, chat, basis, out,
-               S, D, Lp // 4, Lp // g, d.get("f_sc", 1.0), d.get("f_zp", 1.0),
-               OD, d_offset, g, r, tern, BS, BD)
+    if ax_ch:
+        fsc = d["f_sc_t"].reshape(BH, D).float().contiguous() if "f_sc_t" in d else torch.full((BH, D), d.get("f_sc", 1.0), device=out.device)
+        fzp = d["f_zp_t"].reshape(BH, D).float().contiguous() if "f_zp_t" in d else torch.full((BH, D), d.get("f_zp", 1.0), device=out.device)
+        _dq_ch[grid](pack, sc, zp, mu, chat, basis, out, fsc, fzp,
+                     S, D, Lp // 4, Lp // g, OD, d_offset, g, r, tern, BS, BD)
+    else:
+        _dq_tok[grid](pack, sc, zp, mu, chat, basis, out,
+                      S, D, Lp // 4, Lp // g, d.get("f_sc", 1.0), d.get("f_zp", 1.0),
+                      OD, d_offset, g, r, tern, BS, BD)
     return out.reshape(B, H, S, OD) if d_offset == 0 and OD == D else out
 
 
