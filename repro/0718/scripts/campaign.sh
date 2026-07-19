@@ -63,6 +63,9 @@ apply_variant() {  # $1 = arm string like pcar6 / pcaa128 / pcavmean / pcar6vmea
   case $1 in
     *vax*)   export PCA_RES_AXIS_V=channel ;;
   esac
+  case $1 in
+    *vb64*)  export PCA_RES_BLOCK_V=64 ;;
+  esac
 }
 
 IFS=: read -r KIND A B C D <<< "$JOB"
