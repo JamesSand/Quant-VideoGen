@@ -99,3 +99,15 @@ paper 承认 k-means 是延迟大头(其 §4.3 为此做了 centroid caching,称
 - 不写 attention kernel(量化/解量化边界为止,attention 用各管线原装);
 - 不做 INT4/QVG-Pro 对决(另案);
 - 不为速度牺牲任何已定案的质量配置——配置冻结,kernel 只是等价实现。
+
+## M0 执行记录(0720)
+
+- **fp8 scale/zp 模拟**:合成对拍 MSE +0.08%;端到端验证臂在跑;
+- **eigh 陷阱证实**:批量小矩阵 eigh 82ms/call——改用确定性子空间迭代
+  (8 轮 = eigh 能量的 99.6%,7×快),kernel 路径默认 `basis_method="subspace"`;
+- **⚠️ 记账违规被 M0 抓获(本里程碑最大产出)**:channel 轴分块对 37440-token
+  chunk(LC/SF)除不尽,代码回退 96 块长 → 真实 BPE 2.356 **超预算**。修复=
+  补零到整块(BPE 2.3183 ✓,fake/real 两路同步)。**后果:mp100 表 LC/SF 我们
+  两行按修复后格子+fp8 全量重跑重打分**;HY 不受影响(7040%128=0);
+- `kernel/bp_quant.py`:真 encode/decode(2-bit 打包、fp8 元数据、HY 半区),
+  与 fake 路径 MSE 对拍一致(1e-5 相对),实存字节审计 `bp_bytes()`。

@@ -70,6 +70,12 @@ apply_variant() {  # $1 = arm string like pcar6 / pcaa128 / pcavmean / pcar6vmea
     *ktern32*) export PCA_RES_GRID_K=ternary PCA_RES_BLOCK_K=32 ;;
   esac
   case $1 in
+    *fp8*)   export PCA_FP8SIM=1 ;;
+  esac
+  case $1 in
+    *dump*)  export PCA_DUMP_DIR=repro/0720/chunks/$KIND PCA_DUMP_N=8 ;;
+  esac
+  case $1 in
     *chnv*)  export PCA_RES_CHNORM_V=1 ;;
   esac
   case $1 in

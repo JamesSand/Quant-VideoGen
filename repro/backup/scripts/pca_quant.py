@@ -61,6 +61,13 @@ if K_BASIS_FILE:
     _K_BASIS = torch.load(K_BASIS_FILE, map_location="cpu")["eigvecs"]
 
 
+PCA_FP8SIM = os.environ.get("PCA_FP8SIM", "0") == "1"
+# M0 precheck: simulate storing quantizer metadata (scale/zero) in fp8 E4M3,
+# exactly as the real-kernel accounting assumes (kernel-plan.md).
+
+def _fp8(t):
+    return t.to(torch.float8_e4m3fn).to(t.dtype)
+
 PCA_RES_MSEOPT = os.environ.get("PCA_RES_MSEOPT", "0") == "1"
 # N8: per-block MSE-optimal range shrinkage for the asym residual quantizer.
 # Searches a few symmetric-about-center shrink ratios per block and keeps the
@@ -79,6 +86,9 @@ def _asym_quant_lastdim_grouped(x, bits, group, mse_opt=None):
     mx = xg.amax(dim=-1, keepdim=True)
     if not mse_opt:
         scale = ((mx - mn) / (2 ** bits - 1)).clamp_min(1e-8)
+        if PCA_FP8SIM:
+            scale = _fp8(scale).clamp_min(1e-8)
+            mn = _fp8(mn)
         q = torch.clamp(torch.round((xg - mn) / scale), 0, 2 ** bits - 1)
         return (q * scale + mn).reshape(S)
     ctr = (mx + mn) / 2
@@ -105,6 +115,8 @@ def _ternary_quant_blocked(x, block):
     S = x.shape
     xb = x.reshape(*S[:-1], S[-1] // block, block)
     scale = xb.abs().amax(dim=-1, keepdim=True).clamp_min(1e-8)  # max_int = 1
+    if PCA_FP8SIM:
+        scale = _fp8(scale).clamp_min(1e-8)
     q = torch.clamp(torch.round(xb / scale), -1, 1)
     return (q * scale).reshape(S)
 
@@ -143,16 +155,23 @@ def _quant_residual(x, _chnorm_done=False):
                 # debate) — the schedule wins under ANY convention
                 return _asym_quant_lastdim_grouped(x, 1, RES_BLOCK)
     if RES_AXIS == "channel":
-        # per-channel residual: group along the token axis (same metadata volume
-        # class as per-token when block sizes match; scale per (channel, block))
-        xt = x.transpose(-1, -2).contiguous()
-        S_ = xt.shape[-1]
-        g = next((c for c in (RES_BLOCK, 128, 96, 64, 48, 32, 16, 8) if c <= S_ and S_ % c == 0), S_)
-        if PCA_RES_GRID == "ternary":
-            return _ternary_quant_blocked(xt, g).transpose(-1, -2).contiguous()
+        # per-channel residual: group along the token axis. Pad to a full block
+        # (M0 erratum fix: the old divisor-fallback silently used g=96 on
+        # S=37440 chunks -> scale overhead 0.167 bpe, OVER budget. Padding
+        # keeps g=RES_BLOCK and overhead ceil(S/g)*16/S ~= 0.125).
         if PCA_RES_GRID == "zero":
             return torch.zeros_like(x)
-        return _asym_quant_lastdim_grouped(xt, 2, g).transpose(-1, -2).contiguous()
+        xt = x.transpose(-1, -2).contiguous()
+        S_ = xt.shape[-1]
+        g = RES_BLOCK
+        pad = (g - S_ % g) % g
+        if pad:
+            xt = torch.nn.functional.pad(xt, (0, pad))
+        q = (_ternary_quant_blocked(xt, g) if PCA_RES_GRID == "ternary"
+             else _asym_quant_lastdim_grouped(xt, 2, g))
+        if pad:
+            q = q[..., :S_]
+        return q.transpose(-1, -2).contiguous()
     if PCA_RES_GRID == "zero":
         return torch.zeros_like(x)   # drop this residual entirely (BPE saver)
     if PCA_RES_GRID == "ternary":
@@ -540,9 +559,18 @@ def _kivi_fake_quant_kv(k, v):
     return k_q.to(k.dtype), v_q.to(v.dtype)
 
 
+_DUMP_DIR = os.environ.get("PCA_DUMP_DIR", "")
+_DUMP_N = int(os.environ.get("PCA_DUMP_N", "8"))
+
+
 def pca_fake_quant_kv(k, v):
     call_idx = _QW_CTR[0]
     _QW_CTR[0] += 1
+    if _DUMP_DIR and call_idx < _DUMP_N:
+        os.makedirs(_DUMP_DIR, exist_ok=True)
+        torch.save({"k": k.detach().to(torch.bfloat16).cpu(),
+                    "v": v.detach().to(torch.bfloat16).cpu()},
+                   f"{_DUMP_DIR}/chunk_{call_idx:03d}.pt")
     if os.environ.get("PCA_KIVI", "") == "1":
         if not getattr(pca_fake_quant_kv, "_kivi_announced", False):
             pca_fake_quant_kv._kivi_announced = True
