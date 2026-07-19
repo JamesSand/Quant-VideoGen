@@ -22,6 +22,37 @@ def _maybe_compile(fn):
 
 
 @_maybe_compile
+def _qp_asym_ch(res, g: int):
+    """res [BH,S,D] -> channel-axis blocks, transpose+pad fused."""
+    t2 = res.transpose(1, 2)
+    L = t2.shape[-1]
+    pad = (g - L % g) % g
+    t3 = torch.nn.functional.pad(t2, (0, pad))
+    tb = t3.reshape(res.shape[0], res.shape[2], -1, g)
+    mn = tb.amin(-1, keepdim=True); mx = tb.amax(-1, keepdim=True)
+    sc = ((mx - mn) / 3).clamp_min(1e-8).to(FP8).float().clamp_min(1e-8)
+    zp = mn.to(FP8).float()
+    q = torch.clamp(torch.round((tb - zp) / sc), 0, 3).to(torch.uint8)
+    qf = q.reshape(res.shape[0], res.shape[2], -1, 4)
+    packed = qf[..., 0] | (qf[..., 1] << 2) | (qf[..., 2] << 4) | (qf[..., 3] << 6)
+    return packed, sc.squeeze(-1).to(FP8), zp.squeeze(-1).to(FP8)
+
+
+@_maybe_compile
+def _qp_tern_ch(res, g: int):
+    t2 = res.transpose(1, 2)
+    L = t2.shape[-1]
+    pad = (g - L % g) % g
+    t3 = torch.nn.functional.pad(t2, (0, pad))
+    tb = t3.reshape(res.shape[0], res.shape[2], -1, g)
+    sc = tb.abs().amax(-1, keepdim=True).clamp_min(1e-8).to(FP8).float().clamp_min(1e-8)
+    q = (torch.clamp(torch.round(tb / sc), -1, 1) + 1).to(torch.uint8)
+    qf = q.reshape(res.shape[0], res.shape[2], -1, 4)
+    packed = qf[..., 0] | (qf[..., 1] << 2) | (qf[..., 2] << 4) | (qf[..., 3] << 6)
+    return packed, sc.squeeze(-1).to(FP8)
+
+
+@_maybe_compile
 def _qp_asym(tb):
     """tb: [.., nblk, g] -> packed uint8, fp8 scale, fp8 zp (per block)."""
     mn = tb.amin(-1, keepdim=True); mx = tb.amax(-1, keepdim=True)
@@ -40,6 +71,23 @@ def _qp_tern(tb):
     qf = q.reshape(*tb.shape[:-2], -1, 4)
     packed = qf[..., 0] | (qf[..., 1] << 2) | (qf[..., 2] << 4) | (qf[..., 3] << 6)
     return packed, sc.squeeze(-1).to(FP8)
+
+
+@_maybe_compile
+def _dq_full_ch(packed, sc, zp, ternary: bool, g: int, L: int,
+                mu, c_hat, basis):
+    """channel-axis fused decode: unpack -> dequant -> crop -> transpose ->
+    + mu + c_hat @ basis^T, all in one compiled graph. Returns [BH,S,D] f32."""
+    c = torch.stack([(packed >> (2 * i)) & 3 for i in range(4)], dim=-1)
+    codes = c.reshape(*packed.shape[:-1], packed.shape[-1] * 4).float()
+    codes = codes.reshape(*codes.shape[:-1], codes.shape[-1] // g, g)
+    scf = sc.float().unsqueeze(-1)
+    res = (codes - 1) * scf if ternary else codes * scf + zp.float().unsqueeze(-1)
+    res = res.reshape(*res.shape[:-2], -1)[..., :L]           # [BH,D,S]
+    out = res.transpose(1, 2) + mu.float()
+    if basis is not None:
+        out = out + torch.bmm(c_hat, basis.float().transpose(1, 2))
+    return out
 
 
 @_maybe_compile
@@ -72,7 +120,7 @@ def _unpack2(packed, n):
     return out.reshape(*packed.shape[:-1], packed.shape[-1] * 4)[..., :n]
 
 
-def _topr_basis(cov, r, method="subspace", iters=6):
+def _topr_basis(cov, r, method="subspace", iters=5):
     if method == "eigh":
         _, vecs = torch.linalg.eigh(cov)
         return vecs[:, :, -r:].contiguous()
@@ -118,12 +166,20 @@ def bp_encode(x, r=4, grid="asym", block=128, axis="token",
         res = Xc - lowrank
     else:
         res = Xc
-    t = res.transpose(1, 2).contiguous() if axis == "channel" else res  # [BH,D,S] or [BH,S,D]
-    L = t.shape[-1]
     g = block
+    if axis == "channel":
+        L = S
+        pad = (g - L % g) % g
+        if grid == "ternary":
+            packed, sc8 = _qp_tern_ch(res, g)
+            out.update(res_pack=packed, res_scale=sc8, res_zp=None, res_g=g, res_pad=pad)
+        else:
+            packed, sc8, zp8 = _qp_asym_ch(res, g)
+            out.update(res_pack=packed, res_scale=sc8, res_zp=zp8, res_g=g, res_pad=pad)
+        return out
+    L = D
     pad = (g - L % g) % g
-    if pad:
-        t = torch.nn.functional.pad(t, (0, pad))
+    t = torch.nn.functional.pad(res, (0, pad)) if pad else res
     Lp = L + pad
     tb = t.reshape(t.shape[0], t.shape[1], Lp // g, g)
     if grid == "ternary":
@@ -146,17 +202,24 @@ def bp_decode(d, dtype=torch.bfloat16):
     g = d["res_g"]
     Lp = L + d.get("res_pad", 0)
     tern = d["grid"] == "ternary"
+    if d["r"] > 0:
+        cq = _unpack2(d["coef_pack"], d["r"]).float()
+        c_hat = cq * _fp8_load(d["coef_scale"]).unsqueeze(-1) + _fp8_load(d["coef_zp"]).unsqueeze(-1)
+    else:
+        c_hat = None
+    if ax_ch:
+        out = _dq_full_ch(d["res_pack"].reshape(B * H, rows, Lp // 4),
+                          d["res_scale"].reshape(B * H, rows, Lp // g),
+                          (d["res_zp"] if not tern else d["res_scale"]).reshape(B * H, rows, Lp // g),
+                          tern, g, L, d["mu"], c_hat, d.get("basis"))
+        return out.reshape(B, H, S, D).to(dtype)
     res = _dq_res(d["res_pack"].reshape(B * H, rows, Lp // 4),
                   d["res_scale"].reshape(B * H, rows, Lp // g),
                   (d["res_zp"] if not tern else d["res_scale"]).reshape(B * H, rows, Lp // g),
                   tern, g)
     res = res[..., :L]
-    if ax_ch:
-        res = res.transpose(1, 2)                            # -> [BH,S,D]
-    out = res + _fp8_load(d["mu"]) if d["mu"].dtype == FP8 else res + d["mu"].float()
-    if d["r"] > 0:
-        cq = _unpack2(d["coef_pack"], d["r"]).float()
-        c_hat = cq * _fp8_load(d["coef_scale"]).unsqueeze(-1) + _fp8_load(d["coef_zp"]).unsqueeze(-1)
+    out = res + d["mu"].float()
+    if c_hat is not None:
         out = out + torch.bmm(c_hat, d["basis"].float().transpose(1, 2))
     return out.reshape(B, H, S, D).to(dtype)
 
