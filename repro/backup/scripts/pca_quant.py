@@ -66,7 +66,10 @@ PCA_FP8SIM = os.environ.get("PCA_FP8SIM", "0") == "1"
 # exactly as the real-kernel accounting assumes (kernel-plan.md).
 
 def _fp8(t):
-    return t.to(torch.float8_e4m3fn).to(t.dtype)
+    # normalized fp8 storage: one bf16 factor per tensor (amortized ~0) keeps
+    # values inside E4M3 range (LC deep-layer scales reach ~960 > 448 max).
+    f = t.abs().amax().clamp_min(1e-8)
+    return (t / f).to(torch.float8_e4m3fn).to(t.dtype) * f
 
 PCA_RES_MSEOPT = os.environ.get("PCA_RES_MSEOPT", "0") == "1"
 # N8: per-block MSE-optimal range shrinkage for the asym residual quantizer.
