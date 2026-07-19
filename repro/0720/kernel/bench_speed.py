@@ -9,6 +9,7 @@ os.chdir("/home/zhizhousha/workspace/video-project/Quant-VideoGen")
 sys.path.insert(0, "repro/0720/kernel")
 sys.path.insert(0, ".")
 from bp_quant import bp_encode, bp_encode_fast, bp_decode, bp_encode_packed256, bp_decode_packed256, bp_bytes
+from bp_triton import triton_decode, triton_decode_packed256
 from quant_videogen.functions import triton_prq_quantize_tensor, triton_prq_dequantize_tensor
 
 NCH = int(sys.argv[1]) if len(sys.argv) > 1 else 3
@@ -68,15 +69,15 @@ for model in ("lc", "sf", "hy"):
                                             bp_encode(v2, r=0, grid="asym", block=128, axis="token"))}
             def ours_enc(): enc_k(); enc_v()
             ek, ev = enc_k(), enc_v()
-            def ours_dec(): bp_decode_packed256(ek); bp_decode_packed256(ev)
-            dec_k = bp_decode_packed256(ek)
+            def ours_dec(): triton_decode_packed256(ek); triton_decode_packed256(ev)
+            dec_k = triton_decode_packed256(ek)
             nbytes = bp_bytes(ek) + bp_bytes(ev)
         else:
             cfg = CFG[model]["ours"]
             def ours_enc(): bp_encode_fast(k, **cfg); bp_encode_fast(v, **cfg)
             ek, ev = bp_encode_fast(k, **cfg), bp_encode_fast(v, **cfg)
-            def ours_dec(): bp_decode(ek); bp_decode(ev)
-            dec_k = bp_decode(ek)
+            def ours_dec(): triton_decode(ek); triton_decode(ev)
+            dec_k = triton_decode(ek)
             nbytes = bp_bytes(ek) + bp_bytes(ev)
         t_our_enc = timed(ours_enc, 30)
         t_our_dec = timed(ours_dec, 30)
