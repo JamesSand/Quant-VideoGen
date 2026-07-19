@@ -63,10 +63,10 @@ for model in ("lc", "sf", "hy"):
         if model == "hy":
             k1, k2 = k[..., :128].contiguous(), k[..., 128:].contiguous()
             v1, v2 = v[..., :128].contiguous(), v[..., 128:].contiguous()
-            def enc_k(): return {"halves": (bp_encode_fast(k1, r=9, grid="asym", block=64, axis="channel"),
-                                            bp_encode_fast(k2, r=0, grid="ternary", block=64, axis="channel"))}
-            def enc_v(): return {"halves": (bp_encode_fast(v1, r=9, grid="asym", block=128, axis="token"),
-                                            bp_encode_fast(v2, r=0, grid="asym", block=128, axis="token"))}
+            def enc_k(): return {"halves": (bp_encode_fast(k1, r=9, grid="asym", block=64, axis="channel", cmode="reduce-overhead"),
+                                            bp_encode_fast(k2, r=0, grid="ternary", block=64, axis="channel", cmode="reduce-overhead"))}
+            def enc_v(): return {"halves": (bp_encode_fast(v1, r=9, grid="asym", block=128, axis="token", cmode="reduce-overhead"),
+                                            bp_encode_fast(v2, r=0, grid="asym", block=128, axis="token", cmode="reduce-overhead"))}
             def ours_enc(): enc_k(); enc_v()
             ek, ev = enc_k(), enc_v()
             def ours_dec(): triton_decode_packed256(ek); triton_decode_packed256(ev)

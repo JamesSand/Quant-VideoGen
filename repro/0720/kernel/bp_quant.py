@@ -155,8 +155,8 @@ def _topr_basis(cov, r, method="subspace", iters=5):
 _CORE_CACHE = {}
 
 
-def _get_encode_core(grid, axis, r, block, iters=5):
-    key = (grid, axis, r, block, iters)
+def _get_encode_core(grid, axis, r, block, iters=5, cmode=None):
+    key = (grid, axis, r, block, iters, cmode or _CMODE)
     if key in _CORE_CACHE:
         return _CORE_CACHE[key]
 
@@ -249,7 +249,8 @@ def _get_encode_core(grid, axis, r, block, iters=5):
                 packed, (sc / f_sc).squeeze(-1).to(FP8), zp8,
                 f_cs, f_cz, f_sc, f_zp)
 
-    if _COMPILE and _CMODE == "reduce-overhead":
+    m = cmode or _CMODE
+    if _COMPILE and m == "reduce-overhead":
         fn = torch.compile(core, dynamic=False, mode="reduce-overhead")
     elif _COMPILE:
         fn = torch.compile(core, dynamic=False)
@@ -260,14 +261,14 @@ def _get_encode_core(grid, axis, r, block, iters=5):
 
 
 @torch.no_grad()
-def bp_encode_fast(x, r=4, grid="asym", block=128, axis="token", iters=5):
+def bp_encode_fast(x, r=4, grid="asym", block=128, axis="token", iters=5, cmode=None):
     """Whole-graph compiled encode (r>0 only)."""
     B, H, S, D = x.shape
-    core = _get_encode_core(grid, axis, r, block, iters)
+    core = _get_encode_core(grid, axis, r, block, iters, cmode)
     L = S if axis == "channel" else D
     def _own(t):
         # cudagraph outputs are reused buffers under reduce-overhead; take ownership
-        return t.clone() if (_CMODE == "reduce-overhead" and torch.is_tensor(t)) else t
+        return t.clone() if ((cmode or _CMODE) == "reduce-overhead" and torch.is_tensor(t)) else t
     pad = (block - L % block) % block
     if r == 0:
         mu, packed, sc8, zp8, f_sc, f_zp = (_own(t) for t in core(x.reshape(B * H, S, D).float()))
