@@ -54,6 +54,12 @@ apply_variant() {  # $1 = arm string like pcar6 / pcaa128 / pcavmean / pcar6vmea
   case $1 in
     *vptern*) export PCA_RES_GRID_VP=ternary PCA_RES_BLOCK_VP=64 ;;
   esac
+  case $1 in
+    *kax*)   export PCA_RES_AXIS_K=channel ;;
+  esac
+  case $1 in
+    *vax*)   export PCA_RES_AXIS_V=channel ;;
+  esac
 }
 
 IFS=: read -r KIND A B C D <<< "$JOB"

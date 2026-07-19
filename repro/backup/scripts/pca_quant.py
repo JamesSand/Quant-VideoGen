@@ -21,6 +21,8 @@ PCA_KR = int(os.environ.get("PCA_KR", "0")) or None   # K-side rank override
 PCA_VR = int(os.environ.get("PCA_VR", "0")) or None   # V-side rank override
 PCA_COEFF_BITS = int(os.environ.get("PCA_COEFF_BITS", "2"))
 PCA_RES_GRID = os.environ.get("PCA_RES_GRID", "ternary")
+RES_AXIS = os.environ.get("PCA_RES_AXIS", "token")  # token: group along D per token (default);
+# channel: group along tokens per channel (KVQuant/KIVI insight — pre-RoPE K esp.)
 
 import contextlib
 
@@ -29,18 +31,20 @@ def _res_grid_override(which):
     """Per-tensor residual grid/block override: PCA_RES_GRID_K/_V, PCA_RES_BLOCK_K/_V.
     Mixed grids (e.g. K asym + V ternary) stay BPE-legal: ternary counted at 2 bits
     (QVG-symmetric accounting), block overheads averaged across K/V."""
-    global PCA_RES_GRID, RES_BLOCK
+    global PCA_RES_GRID, RES_BLOCK, RES_AXIS
     g = os.environ.get(f"PCA_RES_GRID_{which}", "")
     b = os.environ.get(f"PCA_RES_BLOCK_{which}", "")
-    if not g and not b:
+    a = os.environ.get(f"PCA_RES_AXIS_{which}", "")
+    if not g and not b and not a:
         yield; return
-    prev_g, prev_b = PCA_RES_GRID, RES_BLOCK
+    prev_g, prev_b, prev_a = PCA_RES_GRID, RES_BLOCK, RES_AXIS
     if g: PCA_RES_GRID = g
     if b: RES_BLOCK = int(b)
+    if a: RES_AXIS = a
     try:
         yield
     finally:
-        PCA_RES_GRID, RES_BLOCK = prev_g, prev_b
+        PCA_RES_GRID, RES_BLOCK, RES_AXIS = prev_g, prev_b, prev_a
 PCA_V_MODE = os.environ.get("PCA_V_MODE", "mean")
 RES_BLOCK = int(os.environ.get("PCA_RES_BLOCK", "64"))
 K_BASIS_FILE = os.environ.get("PCA_K_BASIS_FILE", "")
@@ -126,6 +130,17 @@ def _quant_residual(x):
                 # 1-bit asym {min, max}: accounting-unambiguous (no packing
                 # debate) — the schedule wins under ANY convention
                 return _asym_quant_lastdim_grouped(x, 1, RES_BLOCK)
+    if RES_AXIS == "channel":
+        # per-channel residual: group along the token axis (same metadata volume
+        # class as per-token when block sizes match; scale per (channel, block))
+        xt = x.transpose(-1, -2).contiguous()
+        S_ = xt.shape[-1]
+        g = next((c for c in (RES_BLOCK, 128, 96, 64, 48, 32, 16, 8) if c <= S_ and S_ % c == 0), S_)
+        if PCA_RES_GRID == "ternary":
+            return _ternary_quant_blocked(xt, g).transpose(-1, -2).contiguous()
+        if PCA_RES_GRID == "zero":
+            return torch.zeros_like(x)
+        return _asym_quant_lastdim_grouped(xt, 2, g).transpose(-1, -2).contiguous()
     if PCA_RES_GRID == "zero":
         return torch.zeros_like(x)   # drop this residual entirely (BPE saver)
     if PCA_RES_GRID == "ternary":
