@@ -67,6 +67,9 @@ apply_variant() {  # $1 = arm string like pcar6 / pcaa128 / pcavmean / pcar6vmea
     *chnk*)  export PCA_RES_CHNORM_K=1 ;;
   esac
   case $1 in
+    *ktern32*) export PCA_RES_GRID_K=ternary PCA_RES_BLOCK_K=32 ;;
+  esac
+  case $1 in
     *chnv*)  export PCA_RES_CHNORM_V=1 ;;
   esac
   case $1 in

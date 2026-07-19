@@ -18,15 +18,15 @@ def vb_get(path, mf):
     return vb.get(f"{path}::{mf}")
 
 BPE = {"rtn": "2.25", "kivi": "2.25", "quarot": "2.25", "qvg": "2.326",
-       "pca": "**2.3125**", "pcaa128": "**2.3125**", "pcav90kptern": "**2.258**", "bf16": "16"}
+       "pcakaxvax": "**2.3125**", "pcaa128kaxvax": "**2.3125**", "pcav90kpternkaxkb64": "**2.29**", "bf16": "16"}
 LABEL = {"bf16": "BF16 KV(参考)", "rtn": "RTN", "kivi": "KIVI", "quarot": "QuaRot",
-         "qvg": "QVG", "pca": "**Budget-PCA(r4 asym B128)**",
-         "pcaa128": "**Budget-PCA(r4 asym B128)**", "pcav90kptern": "**Budget-PCA(K9:0/V9:0+KP三值)**"}
+         "qvg": "QVG", "pcakaxvax": "**Budget-PCA(r4+双通道轴)**",
+         "pcaa128kaxvax": "**Budget-PCA(r4+双通道轴)**", "pcav90kpternkaxkb64": "**Budget-PCA(K9:0/V9:0+K通道轴B64+KP三值)**"}
 
 def collect(model):
     rows, ns = {}, {}
     if model == "lc":
-        arms = ["bf16", "rtn", "kivi", "quarot", "qvg", "pca"]
+        arms = ["bf16", "rtn", "kivi", "quarot", "qvg", "pcakaxvax"]
         for arm in arms:
             ref_vals, vbs = [], []
             for p in range(1, 101):
@@ -44,7 +44,7 @@ def collect(model):
                          np.array(vbs) if vbs else None)
             ns[arm] = (len(ref_vals), len(vbs))
     elif model == "sf":
-        arms = ["bf16", "rtn", "kivi", "quarot", "qvg", "pcaa128"]
+        arms = ["bf16", "rtn", "kivi", "quarot", "qvg", "pcaa128kaxvax"]
         for arm in arms:
             vbs = []
             for p in range(1, 101):
@@ -55,7 +55,7 @@ def collect(model):
             rows[arm] = (None, np.array(vbs) if vbs else None)
             ns[arm] = (0, len(vbs))
     else:
-        arms = ["bf16", "rtn", "kivi", "quarot", "qvg", "pcav90kptern"]
+        arms = ["bf16", "rtn", "kivi", "quarot", "qvg", "pcav90kpternkaxkb64"]
         for arm in arms:
             ref_vals, vbs = [], []
             for s in range(10):
@@ -90,6 +90,11 @@ def fmt_table(model, title, rows, ns):
         vals = {a: mean_of(a, which, idx) for a in quant_arms}
         vals = {a: v for a, v in vals.items() if v is not None}
         best[col] = max(vals, key=lambda a: vals[a]*direc) if vals else None
+    from math import comb
+    def sign_p(diffs, direction=1):
+        d=[x for x in diffs if x!=0]
+        n=len(d); k=sum(1 for x in d if x*direction>0)
+        return (sum(comb(n,i) for i in range(k,n+1))/2**n if n else 1.0), n
     verdict = []
     for arm in rows:
         r, v = rows[arm]
@@ -105,9 +110,23 @@ def fmt_table(model, title, rows, ns):
         vb_cells = [cell("bc","vb",0,2), cell("iq","vb",1,2), cell("sc","vb",2,2), cell("aq","vb",3,2)]
         out.append(f"| {LABEL[arm]} | {ref_cells[0]} | {ref_cells[1]} | {ref_cells[2]} | "
                    f"{vb_cells[0]} | {vb_cells[1]} | {vb_cells[2]} | {vb_cells[3]} | {BPE[arm]} |")
+    COLIDX = {"psnr":("ref",0,1),"ssim":("ref",1,1),"lpips":("ref",2,-1),
+              "bc":("vb",0,1),"iq":("vb",1,1),"sc":("vb",2,1),"aq":("vb",3,1)}
     for col in best:
         if best[col] and best[col] != ours:
-            verdict.append(f"{model}:{col} best={best[col]}")
+            which, idx, direc = COLIDX[col]
+            ro, rb = rows[ours], rows[best[col]]
+            xo = (ro[0] if which=="ref" else ro[1])
+            xb = (rb[0] if which=="ref" else rb[1])
+            tie = ""
+            if xo is not None and xb is not None and len(xo)==len(xb):
+                dif = (xo[:,idx]-xb[:,idx])*direc
+                p_hi, n = sign_p(dif, 1)
+                p_lo, _ = sign_p(dif, -1)
+                p2 = min(1.0, 2*min(p_hi, p_lo))   # two-sided
+                lab = '统计平局' if p2 > 0.05 else '显著更差'
+                tie = f" (Δ{dif.mean():+.3f}, 双侧p={p2:.3f}, {lab})"
+            verdict.append(f"{model}:{col} best={best[col]}{tie}")
     out.append(f"\n覆盖数 n(ref/vb): " + ", ".join(f"{a}={ns[a][0]}/{ns[a][1]}" for a in rows))
     return "\n".join(out), verdict
 
