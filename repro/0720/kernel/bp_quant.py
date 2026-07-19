@@ -265,9 +265,12 @@ def bp_encode_fast(x, r=4, grid="asym", block=128, axis="token", iters=5):
     B, H, S, D = x.shape
     core = _get_encode_core(grid, axis, r, block, iters)
     L = S if axis == "channel" else D
+    def _own(t):
+        # cudagraph outputs are reused buffers under reduce-overhead; take ownership
+        return t.clone() if (_CMODE == "reduce-overhead" and torch.is_tensor(t)) else t
     pad = (block - L % block) % block
     if r == 0:
-        mu, packed, sc8, zp8, f_sc, f_zp = core(x.reshape(B * H, S, D).float())
+        mu, packed, sc8, zp8, f_sc, f_zp = (_own(t) for t in core(x.reshape(B * H, S, D).float()))
         d0 = {"shape": (B, H, S, D), "r": 0, "grid": grid, "block": block, "axis": axis,
               "mu": mu, "res_pack": packed, "res_scale": sc8, "res_zp": zp8,
               "res_g": block, "res_pad": pad}
@@ -277,7 +280,7 @@ def bp_encode_fast(x, r=4, grid="asym", block=128, axis="token", iters=5):
             d0["f_sc"] = float(f_sc); d0["f_zp"] = float(f_zp)
         return d0
     (mu, V, coef_pack, cs8, cz8, packed, sc8, zp8,
-     f_cs, f_cz, f_sc, f_zp) = core(x.reshape(B * H, S, D).float())
+     f_cs, f_cz, f_sc, f_zp) = (_own(t) for t in core(x.reshape(B * H, S, D).float()))
     out = {"shape": (B, H, S, D), "r": r, "grid": grid, "block": block, "axis": axis,
            "mu": mu, "basis": V, "coef_pack": coef_pack.reshape(B * H, S, -1),
            "coef_scale": cs8, "coef_zp": cz8,
