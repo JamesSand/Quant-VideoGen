@@ -14,11 +14,17 @@ coef quantization; grids identical). Basis: 'eigh' (parity with fake path) or
 import torch
 
 FP8 = torch.float8_e4m3fn
+import os as _os
 _COMPILE = True   # torch.compile fusion for quant/dequant elementwise chains
+_CMODE = _os.environ.get("BP_COMPILE_MODE", "default")
 
 
 def _maybe_compile(fn):
-    return torch.compile(fn, dynamic=False) if _COMPILE else fn
+    if not _COMPILE:
+        return fn
+    if _CMODE == "reduce-overhead":
+        return torch.compile(fn, dynamic=False, mode="reduce-overhead")
+    return torch.compile(fn, dynamic=False)
 
 
 @_maybe_compile
@@ -233,7 +239,12 @@ def _get_encode_core(grid, axis, r, block, iters=5):
                 packed, (sc / f_sc).squeeze(-1).to(FP8), zp8,
                 f_cs, f_cz, f_sc, f_zp)
 
-    fn = torch.compile(core, dynamic=False) if _COMPILE else core
+    if _COMPILE and _CMODE == "reduce-overhead":
+        fn = torch.compile(core, dynamic=False, mode="reduce-overhead")
+    elif _COMPILE:
+        fn = torch.compile(core, dynamic=False)
+    else:
+        fn = core
     _CORE_CACHE[key] = fn
     return fn
 

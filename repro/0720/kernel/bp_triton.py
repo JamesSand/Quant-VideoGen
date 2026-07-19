@@ -11,7 +11,7 @@ import triton.language as tl
 
 @triton.jit
 def _dq_ch(pack_ptr, sc_ptr, zp_ptr, mu_ptr, chat_ptr, basis_ptr, out_ptr,
-           S, D, SP4, NBLK, F_SC, F_ZP, G: tl.constexpr, R: tl.constexpr, TERN: tl.constexpr,
+           S, D, SP4, NBLK, F_SC, F_ZP, OD, DOFF, G: tl.constexpr, R: tl.constexpr, TERN: tl.constexpr,
            BS: tl.constexpr, BD: tl.constexpr):
     pb = tl.program_id(0)
     ps = tl.program_id(1)
@@ -43,13 +43,13 @@ def _dq_ch(pack_ptr, sc_ptr, zp_ptr, mu_ptr, chat_ptr, basis_ptr, out_ptr,
             bs = tl.load(basis_ptr + pb * D * R + offs_d * R + r, mask=md, other=0.0).to(tl.float32)
             acc += bs[:, None] * ch[None, :]
     # write transposed: out[bh, s, d]
-    tl.store(out_ptr + pb * S * D + offs_s[None, :] * D + offs_d[:, None],
+    tl.store(out_ptr + pb * S * OD + offs_s[None, :] * OD + offs_d[:, None] + DOFF,
              acc.to(tl.bfloat16), mask=md[:, None] & ms[None, :])
 
 
 @triton.jit
 def _dq_tok(pack_ptr, sc_ptr, zp_ptr, mu_ptr, chat_ptr, basis_ptr, out_ptr,
-            S, D, DP4, NBLK, F_SC, F_ZP, G: tl.constexpr, R: tl.constexpr, TERN: tl.constexpr,
+            S, D, DP4, NBLK, F_SC, F_ZP, OD, DOFF, G: tl.constexpr, R: tl.constexpr, TERN: tl.constexpr,
             BS: tl.constexpr, BD: tl.constexpr):
     pb = tl.program_id(0)
     ps = tl.program_id(1)
@@ -79,13 +79,14 @@ def _dq_tok(pack_ptr, sc_ptr, zp_ptr, mu_ptr, chat_ptr, basis_ptr, out_ptr,
             ch = tl.load(chat_ptr + pb * S * R + offs_s * R + r, mask=ms, other=0.0).to(tl.float32)
             bs = tl.load(basis_ptr + pb * D * R + offs_d * R + r, mask=md, other=0.0).to(tl.float32)
             acc += ch[:, None] * bs[None, :]
-    tl.store(out_ptr + pb * S * D + offs_s[:, None] * D + offs_d[None, :],
+    tl.store(out_ptr + pb * S * OD + offs_s[:, None] * OD + offs_d[None, :] + DOFF,
              acc.to(tl.bfloat16), mask=ms[:, None] & md[None, :])
 
 
 @torch.no_grad()
-def triton_decode(d, c_hat=None):
-    """d: bp_encode dict (single tensor, not packed256). Returns [B,H,S,D] bf16."""
+def triton_decode(d, c_hat=None, out=None, d_offset=0, out_D=None):
+    """d: bp_encode dict (single tensor, not packed256). Returns [B,H,S,D(out_D)] bf16.
+    out/d_offset: write into a preallocated wider buffer (packed256 halves)."""
     B, H, S, D = d["shape"]
     BH = B * H
     g = d["res_g"]
@@ -99,7 +100,9 @@ def triton_decode(d, c_hat=None):
         cq = _unpack2(d["coef_pack"].reshape(BH, S, -1), r).float()
         c_hat = (cq * _fp8_load(d["coef_scale"]).unsqueeze(-1) * d.get("f_cs", 1.0)
                  + _fp8_load(d["coef_zp"]).unsqueeze(-1) * d.get("f_cz", 1.0))
-    out = torch.empty(BH, S, D, device=d["res_pack"].device, dtype=torch.bfloat16)
+    OD = out_D or D
+    if out is None:
+        out = torch.empty(BH, S, OD, device=d["res_pack"].device, dtype=torch.bfloat16)
     pack = d["res_pack"].reshape(BH, D if ax_ch else S, Lp // 4)
     sc = d["res_scale"].reshape(BH, D if ax_ch else S, Lp // g)
     zp = d["res_zp"].reshape(BH, D if ax_ch else S, Lp // g) if d["res_zp"] is not None else sc
@@ -111,10 +114,15 @@ def triton_decode(d, c_hat=None):
     kern = _dq_ch if ax_ch else _dq_tok
     kern[grid](pack, sc, zp, mu, chat, basis, out,
                S, D, Lp // 4, Lp // g, d.get("f_sc", 1.0), d.get("f_zp", 1.0),
-               g, r, tern, BS, BD)
-    return out.reshape(B, H, S, D)
+               OD, d_offset, g, r, tern, BS, BD)
+    return out.reshape(B, H, S, OD) if d_offset == 0 and OD == D else out
 
 
 @torch.no_grad()
 def triton_decode_packed256(d):
-    return torch.cat([triton_decode(d["halves"][0]), triton_decode(d["halves"][1])], dim=-1)
+    h1, h2 = d["halves"]
+    B, H, S, D1 = h1["shape"]
+    out = torch.empty(B * H, S, 256, device=h1["res_pack"].device, dtype=torch.bfloat16)
+    triton_decode(h1, out=out, d_offset=0, out_D=256)
+    triton_decode(h2, out=out, d_offset=128, out_D=256)
+    return out.reshape(B, H, S, 256)
