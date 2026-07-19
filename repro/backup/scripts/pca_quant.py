@@ -561,8 +561,11 @@ def _kivi_fake_quant_kv(k, v):
     the pipelines' native BF16 recent window (aged-chunk quantization)."""
     kt = k.transpose(-1, -2).contiguous()          # [B,H,D,S]
     S = kt.shape[-1]
-    g = next((c for c in (128, 96, 64, 48, 32, 16, 8) if S % c == 0), S)
-    k_q = _asym_quant_lastdim_grouped(kt, 2, g, mse_opt=False).transpose(-1, -2).contiguous()
+    g = 128
+    pad = (g - S % g) % g
+    if pad:
+        kt = torch.nn.functional.pad(kt, (0, pad))
+    k_q = _asym_quant_lastdim_grouped(kt, 2, g, mse_opt=False, fp8_per_row=True)[..., :S].transpose(-1, -2).contiguous()
     v_q = _asym_quant_lastdim_grouped(v, 2, 64, mse_opt=False)
     return k_q.to(k.dtype), v_q.to(v.dtype)
 
