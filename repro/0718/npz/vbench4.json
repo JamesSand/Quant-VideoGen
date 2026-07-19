@@ -397,5 +397,257 @@
 "AQ": 61.86,
 "IQ": 77.75,
 "n": 173
+},
+"results/multiprompt/hy/pcav90kpternchnk_s0/0-0.mp4::0": {
+"BC": 95.03,
+"SC": 92.32,
+"AQ": 62.93,
+"IQ": 77.48,
+"n": 173
+},
+"results/multiprompt/hy/pcav90kpternchnk_s1/0-1.mp4::0": {
+"BC": 94.51,
+"SC": 92.08,
+"AQ": 62.91,
+"IQ": 77.8,
+"n": 173
+},
+"results/multiprompt/hy/pcav90kpternchnk_s2/0-2.mp4::0": {
+"BC": 95.76,
+"SC": 93.51,
+"AQ": 62.89,
+"IQ": 77.41,
+"n": 173
+},
+"results/multiprompt/hy/pcav90kpternchnk_s3/0-3.mp4::0": {
+"BC": 95.08,
+"SC": 92.8,
+"AQ": 62.99,
+"IQ": 76.98,
+"n": 173
+},
+"results/multiprompt/hy/pcav90kpternchnk_s4/0-4.mp4::0": {
+"BC": 94.25,
+"SC": 92.01,
+"AQ": 61.89,
+"IQ": 76.7,
+"n": 173
+},
+"results/multiprompt/hy/pcav90kpternchnk_s5/0-5.mp4::0": {
+"BC": 94.79,
+"SC": 92.65,
+"AQ": 64.41,
+"IQ": 77.6,
+"n": 173
+},
+"results/multiprompt/hy/pcav90kpternchnk_s6/0-6.mp4::0": {
+"BC": 94.61,
+"SC": 92.16,
+"AQ": 62.82,
+"IQ": 77.46,
+"n": 173
+},
+"results/multiprompt/hy/pcav90kpternchnk_s7/0-7.mp4::0": {
+"BC": 95.43,
+"SC": 92.83,
+"AQ": 62.87,
+"IQ": 77.57,
+"n": 173
+},
+"results/multiprompt/hy/pcav90kpternchnk_s8/0-8.mp4::0": {
+"BC": 93.89,
+"SC": 90.62,
+"AQ": 60.45,
+"IQ": 78.07,
+"n": 173
+},
+"results/multiprompt/hy/pcav90kpternchnk_s9/0-9.mp4::0": {
+"BC": 94.55,
+"SC": 92.89,
+"AQ": 63.02,
+"IQ": 78.02,
+"n": 173
+},
+"results/multiprompt/mp100/sf/pcaa128chnk_rep0_f180/p4/0-0_ema.mp4::700": {
+"BC": 97.12,
+"SC": 97.32,
+"AQ": 55.41,
+"IQ": 64.05,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128chnk_rep0_f180/p9/0-0_ema.mp4::700": {
+"BC": 91.17,
+"SC": 75.63,
+"AQ": 49.49,
+"IQ": 36.31,
+"n": 700
+},
+"results/multiprompt/mp100/lc/pcachnkchnv_rep0/p8/8-0/segment_1.mp4::0": {
+"BC": 95.93,
+"SC": 92.17,
+"AQ": 62.83,
+"IQ": 60.22,
+"n": 113
+},
+"results/multiprompt/mp100/lc/pcachnkchnv_rep0/p10/10-0/segment_1.mp4::0": {
+"BC": 95.43,
+"SC": 94.67,
+"AQ": 60.53,
+"IQ": 66.21,
+"n": 113
+},
+"results/multiprompt/hy/pcav90kpternkaxkb64_s3/0-3.mp4::0": {
+"BC": 95.5,
+"SC": 94.27,
+"AQ": 62.58,
+"IQ": 78.03,
+"n": 173
+},
+"results/multiprompt/hy/pcav90kpternkaxkb64_s4/0-4.mp4::0": {
+"BC": 96.01,
+"SC": 94.88,
+"AQ": 61.17,
+"IQ": 78.09,
+"n": 173
+},
+"results/multiprompt/hy/pcav90kpternkaxkb64_s8/0-8.mp4::0": {
+"BC": 95.82,
+"SC": 94.34,
+"AQ": 61.92,
+"IQ": 78.9,
+"n": 173
+},
+"results/multiprompt/hy/pcav90kpternkaxkb64_s9/0-9.mp4::0": {
+"BC": 95.99,
+"SC": 95.18,
+"AQ": 63.03,
+"IQ": 77.99,
+"n": 173
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvax_rep0_f180/p1/0-0_ema.mp4::700": {
+"BC": 98.19,
+"SC": 95.99,
+"AQ": 58.03,
+"IQ": 69.16,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvax_rep0_f180/p2/0-0_ema.mp4::700": {
+"BC": 96.04,
+"SC": 93.5,
+"AQ": 55.83,
+"IQ": 72.86,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvax_rep0_f180/p3/0-0_ema.mp4::700": {
+"BC": 97.17,
+"SC": 96.78,
+"AQ": 54.08,
+"IQ": 79.91,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvax_rep0_f180/p4/0-0_ema.mp4::700": {
+"BC": 97.1,
+"SC": 97.5,
+"AQ": 54.55,
+"IQ": 62.79,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvax_rep0_f180/p5/0-0_ema.mp4::700": {
+"BC": 90.71,
+"SC": 80.47,
+"AQ": 53.01,
+"IQ": 72.83,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvax_rep0_f180/p6/0-0_ema.mp4::700": {
+"BC": 97.18,
+"SC": 93.37,
+"AQ": 60.64,
+"IQ": 66.32,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvax_rep0_f180/p7/0-0_ema.mp4::700": {
+"BC": 97.09,
+"SC": 91.96,
+"AQ": 54.11,
+"IQ": 70.97,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvax_rep0_f180/p8/0-0_ema.mp4::700": {
+"BC": 88.7,
+"SC": 80.37,
+"AQ": 50.66,
+"IQ": 66.46,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvax_rep0_f180/p9/0-0_ema.mp4::700": {
+"BC": 91.77,
+"SC": 77.89,
+"AQ": 49.15,
+"IQ": 37.13,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvax_rep0_f180/p10/0-0_ema.mp4::700": {
+"BC": 89.05,
+"SC": 85.71,
+"AQ": 53.98,
+"IQ": 73.22,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128chnk_rep0_f180/p1/0-0_ema.mp4::700": {
+"BC": 98.15,
+"SC": 95.0,
+"AQ": 57.49,
+"IQ": 68.95,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128chnk_rep0_f180/p2/0-0_ema.mp4::700": {
+"BC": 95.44,
+"SC": 92.12,
+"AQ": 55.83,
+"IQ": 72.89,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128chnk_rep0_f180/p3/0-0_ema.mp4::700": {
+"BC": 96.87,
+"SC": 96.8,
+"AQ": 54.13,
+"IQ": 79.92,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128chnk_rep0_f180/p5/0-0_ema.mp4::700": {
+"BC": 91.46,
+"SC": 80.12,
+"AQ": 52.13,
+"IQ": 68.35,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128chnk_rep0_f180/p6/0-0_ema.mp4::700": {
+"BC": 96.15,
+"SC": 91.31,
+"AQ": 60.21,
+"IQ": 61.96,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128chnk_rep0_f180/p7/0-0_ema.mp4::700": {
+"BC": 95.7,
+"SC": 87.11,
+"AQ": 53.17,
+"IQ": 68.27,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128chnk_rep0_f180/p8/0-0_ema.mp4::700": {
+"BC": 86.72,
+"SC": 79.26,
+"AQ": 49.91,
+"IQ": 68.18,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128chnk_rep0_f180/p10/0-0_ema.mp4::700": {
+"BC": 89.61,
+"SC": 84.59,
+"AQ": 53.4,
+"IQ": 72.38,
+"n": 700
 }
 }
