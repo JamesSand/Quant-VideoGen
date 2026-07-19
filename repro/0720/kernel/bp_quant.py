@@ -154,6 +154,32 @@ def _get_encode_core(grid, axis, r, block, iters=5):
         BH, S, D = X.shape
         mu = X.mean(dim=1, keepdim=True)
         Xc = X - mu
+        if r == 0:
+            res = Xc
+            t2 = res.transpose(1, 2) if axis == "channel" else res
+            L = t2.shape[-1]
+            pad = (block - L % block) % block
+            t3 = torch.nn.functional.pad(t2, (0, pad))
+            tb = t3.reshape(t2.shape[0], t2.shape[1], -1, block)
+            if grid == "ternary":
+                sc0 = tb.abs().amax(-1, keepdim=True).clamp_min(1e-8)
+                f_sc = sc0.amax().clamp_min(1e-8)
+                sc = ((sc0 / f_sc).to(FP8).float() * f_sc).clamp_min(1e-8)
+                qv = (torch.clamp(torch.round(tb / sc), -1, 1) + 1).to(torch.uint8)
+                zp8 = None
+                f_zp = f_sc
+            else:
+                mn2 = tb.amin(-1, keepdim=True); mx2 = tb.amax(-1, keepdim=True)
+                sc0 = ((mx2 - mn2) / 3).clamp_min(1e-8)
+                f_sc = sc0.amax().clamp_min(1e-8)
+                sc = ((sc0 / f_sc).to(FP8).float() * f_sc).clamp_min(1e-8)
+                f_zp = mn2.abs().amax().clamp_min(1e-8)
+                zp = (mn2 / f_zp).to(FP8).float() * f_zp
+                qv = torch.clamp(torch.round((tb - zp) / sc), 0, 3).to(torch.uint8)
+                zp8 = (zp / f_zp).squeeze(-1).to(FP8)
+            qf = qv.reshape(t2.shape[0], t2.shape[1], -1, 4)
+            packed = qf[..., 0] | (qf[..., 1] << 2) | (qf[..., 2] << 4) | (qf[..., 3] << 6)
+            return (mu.to(torch.bfloat16), packed, (sc / f_sc).squeeze(-1).to(FP8), zp8, f_sc, f_zp)
         Xb = Xc.to(torch.bfloat16)
         cov = torch.baddbmm(torch.zeros(1, device=X.device, dtype=torch.bfloat16),
                             Xb.transpose(1, 2), Xb, beta=0).float() / S
@@ -217,10 +243,16 @@ def bp_encode_fast(x, r=4, grid="asym", block=128, axis="token", iters=5):
     """Whole-graph compiled encode (r>0 only)."""
     B, H, S, D = x.shape
     core = _get_encode_core(grid, axis, r, block, iters)
-    (mu, V, coef_pack, cs8, cz8, packed, sc8, zp8,
-     f_cs, f_cz, f_sc, f_zp) = core(x.reshape(B * H, S, D).float())
     L = S if axis == "channel" else D
     pad = (block - L % block) % block
+    if r == 0:
+        mu, packed, sc8, zp8, f_sc, f_zp = core(x.reshape(B * H, S, D).float())
+        return {"shape": (B, H, S, D), "r": 0, "grid": grid, "block": block, "axis": axis,
+                "mu": mu, "res_pack": packed, "res_scale": sc8, "res_zp": zp8,
+                "res_g": block, "res_pad": pad,
+                "f_sc": float(f_sc), "f_zp": float(f_zp)}
+    (mu, V, coef_pack, cs8, cz8, packed, sc8, zp8,
+     f_cs, f_cz, f_sc, f_zp) = core(x.reshape(B * H, S, D).float())
     out = {"shape": (B, H, S, D), "r": r, "grid": grid, "block": block, "axis": axis,
            "mu": mu, "basis": V, "coef_pack": coef_pack.reshape(B * H, S, -1),
            "coef_scale": cs8, "coef_zp": cz8,
