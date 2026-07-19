@@ -1,6 +1,6 @@
 # Kernel 化结果:同输入速度对决,三模型全胜(encode 严格更快,合计 ≥ 平手)
 
-> 对应 [kernel-plan.md](kernel-plan.md)。实现 [`kernel/bp_quant.py`](kernel/bp_quant.py)
+> plan 已实现并按约定删除(内容由本文档取代)。实现 [`kernel/bp_quant.py`](kernel/bp_quant.py)
 > (encode:整图 torch.compile)+ [`kernel/bp_triton.py`](kernel/bp_triton.py)
 > (decode:手写 Triton 融合 kernel)。基准 [`kernel/bench_speed.py`](kernel/bench_speed.py),
 > 原始数据 `kernel/bench_report.json`。
