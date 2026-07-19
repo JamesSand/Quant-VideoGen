@@ -14,6 +14,43 @@ coef quantization; grids identical). Basis: 'eigh' (parity with fake path) or
 import torch
 
 FP8 = torch.float8_e4m3fn
+_COMPILE = True   # torch.compile fusion for quant/dequant elementwise chains
+
+
+def _maybe_compile(fn):
+    return torch.compile(fn, dynamic=False) if _COMPILE else fn
+
+
+@_maybe_compile
+def _qp_asym(tb):
+    """tb: [.., nblk, g] -> packed uint8, fp8 scale, fp8 zp (per block)."""
+    mn = tb.amin(-1, keepdim=True); mx = tb.amax(-1, keepdim=True)
+    sc = ((mx - mn) / 3).clamp_min(1e-8).to(FP8).float().clamp_min(1e-8)
+    zp = mn.to(FP8).float()
+    q = torch.clamp(torch.round((tb - zp) / sc), 0, 3).to(torch.uint8)
+    qf = q.reshape(*tb.shape[:-2], -1, 4)
+    packed = qf[..., 0] | (qf[..., 1] << 2) | (qf[..., 2] << 4) | (qf[..., 3] << 6)
+    return packed, sc.squeeze(-1).to(FP8), zp.squeeze(-1).to(FP8)
+
+
+@_maybe_compile
+def _qp_tern(tb):
+    sc = tb.abs().amax(-1, keepdim=True).clamp_min(1e-8).to(FP8).float().clamp_min(1e-8)
+    q = (torch.clamp(torch.round(tb / sc), -1, 1) + 1).to(torch.uint8)
+    qf = q.reshape(*tb.shape[:-2], -1, 4)
+    packed = qf[..., 0] | (qf[..., 1] << 2) | (qf[..., 2] << 4) | (qf[..., 3] << 6)
+    return packed, sc.squeeze(-1).to(FP8)
+
+
+@_maybe_compile
+def _dq_res(packed, sc, zp, ternary: bool, g: int):
+    """packed [.., rows, Lp/4] -> dequantized [.., rows, Lp] float32."""
+    c = torch.stack([(packed >> (2 * i)) & 3 for i in range(4)], dim=-1)
+    codes = c.reshape(*packed.shape[:-1], packed.shape[-1] * 4).float()
+    codes = codes.reshape(*codes.shape[:-1], codes.shape[-1] // g, g)
+    scf = sc.float().unsqueeze(-1)
+    out = (codes - 1) * scf if ternary else codes * scf + zp.float().unsqueeze(-1)
+    return out.reshape(*out.shape[:-2], -1)
 
 
 def _fp8_store(t):
@@ -35,14 +72,19 @@ def _unpack2(packed, n):
     return out.reshape(*packed.shape[:-1], packed.shape[-1] * 4)[..., :n]
 
 
-def _topr_basis(cov, r, method="subspace", iters=8):
+def _topr_basis(cov, r, method="subspace", iters=6):
     if method == "eigh":
         _, vecs = torch.linalg.eigh(cov)
         return vecs[:, :, -r:].contiguous()
     V = cov[:, :, :r].clone()          # deterministic init
     for i in range(iters):
         V = cov @ V
-        V, _ = torch.linalg.qr(V)
+        # orthonormalize via inverse Cholesky of the tiny r x r gram
+        # (much faster than batched QR on [BH, D, r])
+        G = V.transpose(1, 2) @ V
+        G = G + 1e-6 * torch.eye(r, device=V.device, dtype=V.dtype) * G.diagonal(dim1=-2, dim2=-1).amax(-1)[:, None, None]
+        Lc = torch.linalg.cholesky(G)
+        V = torch.linalg.solve_triangular(Lc, V.transpose(1, 2), upper=False).transpose(1, 2)
     return V
 
 
@@ -57,8 +99,9 @@ def bp_encode(x, r=4, grid="asym", block=128, axis="token",
     out = {"shape": (B, H, S, D), "r": r, "grid": grid, "block": block,
            "axis": axis, "mu": mu.to(torch.bfloat16)}
     if r > 0:
-        cov = torch.baddbmm(torch.zeros(1, device=x.device), Xc.transpose(1, 2), Xc,
-                            beta=0).div_(S)                 # [BH,D,D]
+        Xb = Xc.to(torch.bfloat16)
+        cov = torch.baddbmm(torch.zeros(1, device=x.device, dtype=torch.bfloat16),
+                            Xb.transpose(1, 2), Xb, beta=0).float().div_(S)   # [BH,D,D]
         V = _topr_basis(cov, r, basis_method)               # [BH,D,r]
         c = torch.bmm(Xc, V)                                # [BH,S,r]
         mn = c.amin(-1, keepdim=True); mx = c.amax(-1, keepdim=True)
@@ -67,8 +110,10 @@ def bp_encode(x, r=4, grid="asym", block=128, axis="token",
         cq = torch.clamp(torch.round((c - cz) / cs), 0, 2 ** coef_bits - 1)
         c_hat = cq * cs + cz
         lowrank = torch.bmm(c_hat, V.transpose(1, 2))
-        out.update(basis=V.to(torch.bfloat16),
-                   coef_pack=_pack2(cq.to(torch.uint8)) if r % 4 == 0 else cq.to(torch.uint8),
+        cq8 = cq.to(torch.uint8)
+        if r % 4:
+            cq8 = torch.nn.functional.pad(cq8, (0, 4 - r % 4))
+        out.update(basis=V.to(torch.bfloat16), coef_pack=_pack2(cq8),
                    coef_scale=_fp8_store(cs.squeeze(-1)), coef_zp=_fp8_store(cz.squeeze(-1)))
         res = Xc - lowrank
     else:
@@ -82,17 +127,13 @@ def bp_encode(x, r=4, grid="asym", block=128, axis="token",
     Lp = L + pad
     tb = t.reshape(t.shape[0], t.shape[1], Lp // g, g)
     if grid == "ternary":
-        sc = _fp8_load(_fp8_store(tb.abs().amax(-1, keepdim=True).clamp_min(1e-8))).clamp_min(1e-8)
-        q = torch.clamp(torch.round(tb / sc), -1, 1) + 1     # {0,1,2}
-        out.update(res_pack=_pack2(q.to(torch.uint8).reshape(t.shape[0], t.shape[1], Lp)),
-                   res_scale=_fp8_store(sc.squeeze(-1)), res_zp=None, res_g=g, res_pad=pad)
+        packed, sc8 = _qp_tern(tb)
+        out.update(res_pack=packed.reshape(t.shape[0], t.shape[1], Lp // 4),
+                   res_scale=sc8, res_zp=None, res_g=g, res_pad=pad)
     else:
-        mn = tb.amin(-1, keepdim=True); mx = tb.amax(-1, keepdim=True)
-        sc = _fp8_load(_fp8_store(((mx - mn) / 3).clamp_min(1e-8))).clamp_min(1e-8)
-        zp = _fp8_load(_fp8_store(mn))
-        q = torch.clamp(torch.round((tb - zp) / sc), 0, 3)
-        out.update(res_pack=_pack2(q.to(torch.uint8).reshape(t.shape[0], t.shape[1], Lp)),
-                   res_scale=_fp8_store(sc.squeeze(-1)), res_zp=_fp8_store(zp.squeeze(-1)), res_g=g, res_pad=pad)
+        packed, sc8, zp8 = _qp_asym(tb)
+        out.update(res_pack=packed.reshape(t.shape[0], t.shape[1], Lp // 4),
+                   res_scale=sc8, res_zp=zp8, res_g=g, res_pad=pad)
     return out
 
 
@@ -104,31 +145,31 @@ def bp_decode(d, dtype=torch.bfloat16):
     rows = D if ax_ch else S
     g = d["res_g"]
     Lp = L + d.get("res_pad", 0)
-    codes = _unpack2(d["res_pack"], Lp).reshape(B * H, rows, Lp // g, g).float()
-    sc = _fp8_load(d["res_scale"]).unsqueeze(-1)
-    if d["grid"] == "ternary":
-        res = (codes - 1) * sc
-    else:
-        res = codes * sc + _fp8_load(d["res_zp"]).unsqueeze(-1)
-    res = res.reshape(B * H, rows, Lp)[..., :L]
+    tern = d["grid"] == "ternary"
+    res = _dq_res(d["res_pack"].reshape(B * H, rows, Lp // 4),
+                  d["res_scale"].reshape(B * H, rows, Lp // g),
+                  (d["res_zp"] if not tern else d["res_scale"]).reshape(B * H, rows, Lp // g),
+                  tern, g)
+    res = res[..., :L]
     if ax_ch:
         res = res.transpose(1, 2)                            # -> [BH,S,D]
     out = res + _fp8_load(d["mu"]) if d["mu"].dtype == FP8 else res + d["mu"].float()
     if d["r"] > 0:
-        cq = _unpack2(d["coef_pack"], d["r"]).float() if d["r"] % 4 == 0 else d["coef_pack"].float()
+        cq = _unpack2(d["coef_pack"], d["r"]).float()
         c_hat = cq * _fp8_load(d["coef_scale"]).unsqueeze(-1) + _fp8_load(d["coef_zp"]).unsqueeze(-1)
         out = out + torch.bmm(c_hat, d["basis"].float().transpose(1, 2))
     return out.reshape(B, H, S, D).to(dtype)
 
 
 @torch.no_grad()
-def bp_encode_packed256(x, r_h1=9, r_h2=0, **kw):
-    """HY: [B,H,S,256] = rope||prope halves, separate rank/grid per half."""
-    h1 = bp_encode(x[..., :128].contiguous(), r=r_h1, **{**kw})
-    kw2 = dict(kw); kw2["grid"] = kw.get("grid_h2", "ternary"); kw2.pop("grid_h2", None)
-    kw2["block"] = kw.get("block_h2", 64); kw2.pop("block_h2", None)
-    kw.pop("grid_h2", None); kw.pop("block_h2", None)
-    h2 = bp_encode(x[..., 128:].contiguous(), r=r_h2, **{k: v for k, v in kw2.items() if k not in ("grid_h2", "block_h2")})
+def bp_encode_packed256(x, r_h1=9, r_h2=0, grid="asym", block=64, axis="channel",
+                        grid_h2="ternary", block_h2=64, axis_h2=None,
+                        basis_method="subspace"):
+    """HY: [B,H,S,256] = rope||prope halves, separate rank/grid/block per half."""
+    h1 = bp_encode(x[..., :128].contiguous(), r=r_h1, grid=grid, block=block,
+                   axis=axis, basis_method=basis_method)
+    h2 = bp_encode(x[..., 128:].contiguous(), r=r_h2, grid=grid_h2, block=block_h2,
+                   axis=axis_h2 or axis, basis_method=basis_method)
     return {"halves": (h1, h2)}
 
 

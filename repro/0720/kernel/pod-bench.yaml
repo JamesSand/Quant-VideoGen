@@ -19,7 +19,7 @@ spec:
           - matchExpressions:
               - key: kubernetes.io/hostname
                 operator: In
-                values: ["research-common-h100-055.cloud.together.ai"]
+                values: ["research-common-h100-047.cloud.together.ai"]
   runtimeClassName: nvidia
   containers:
     - name: worker

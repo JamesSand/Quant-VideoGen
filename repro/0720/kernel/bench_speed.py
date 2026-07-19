@@ -47,11 +47,11 @@ for model in ("lc", "sf", "hy"):
         qvg_reps = 10 if iters >= 100 else 30
         # ---- QVG encode (k and v, as the pipeline does) ----
         def qvg_enc():
-            triton_prq_quantize_tensor(k, num_stages=1, num_clusters=256, block_size=64, max_iters=iters)
-            triton_prq_quantize_tensor(v, num_stages=1, num_clusters=256, block_size=64, max_iters=iters)
+            triton_prq_quantize_tensor(k, num_stages=1, num_clusters=256, block_size=64, max_iters=iters, quantize_fn=lambda t: 2)
+            triton_prq_quantize_tensor(v, num_stages=1, num_clusters=256, block_size=64, max_iters=iters, quantize_fn=lambda t: 2)
         t_qvg_enc = timed(qvg_enc, qvg_reps, warmup=3)
-        qk = triton_prq_quantize_tensor(k, num_stages=1, num_clusters=256, block_size=64, max_iters=iters)
-        qv = triton_prq_quantize_tensor(v, num_stages=1, num_clusters=256, block_size=64, max_iters=iters)
+        qk = triton_prq_quantize_tensor(k, num_stages=1, num_clusters=256, block_size=64, max_iters=iters, quantize_fn=lambda t: 2)
+        qv = triton_prq_quantize_tensor(v, num_stages=1, num_clusters=256, block_size=64, max_iters=iters, quantize_fn=lambda t: 2)
         def qvg_dec():
             triton_prq_dequantize_tensor(qk, block_size=64, num_bits=2)
             triton_prq_dequantize_tensor(qv, block_size=64, num_bits=2)
@@ -62,7 +62,7 @@ for model in ("lc", "sf", "hy"):
         if model == "hy":
             enc_k = lambda: bp_encode_packed256(k, r_h1=9, r_h2=0, grid="asym", block=64,
                                                 axis="channel", grid_h2="ternary", block_h2=64)
-            enc_v = lambda: bp_encode_packed256(v, r_h1=9, r_h2=0, grid="asym", block=128, axis="token")
+            enc_v = lambda: bp_encode_packed256(v, r_h1=9, r_h2=0, grid="asym", block=128, axis="token", grid_h2="asym", block_h2=128)
             def ours_enc(): enc_k(); enc_v()
             ek, ev = enc_k(), enc_v()
             def ours_dec(): bp_decode_packed256(ek); bp_decode_packed256(ev)
