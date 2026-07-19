@@ -87,7 +87,7 @@ def _dq_full_ch(packed, sc, zp, ternary: bool, g: int, L: int,
     out = res.transpose(1, 2) + mu.float()
     if basis is not None:
         out = out + torch.bmm(c_hat, basis.float().transpose(1, 2))
-    return out
+    return out.to(torch.bfloat16)
 
 
 @_maybe_compile
@@ -287,7 +287,8 @@ def bp_decode(d, dtype=torch.bfloat16):
                           d["res_scale"].reshape(B * H, rows, Lp // g),
                           (d["res_zp"] if not tern else d["res_scale"]).reshape(B * H, rows, Lp // g),
                           tern, g, L, d["mu"], c_hat, d.get("basis"))
-        return out.reshape(B, H, S, D).to(dtype)
+        out = out.reshape(B, H, S, D)
+        return out if dtype == torch.bfloat16 else out.to(dtype)
     res = _dq_res(d["res_pack"].reshape(B * H, rows, Lp // 4),
                   d["res_scale"].reshape(B * H, rows, Lp // g),
                   (d["res_zp"] if not tern else d["res_scale"]).reshape(B * H, rows, Lp // g),
