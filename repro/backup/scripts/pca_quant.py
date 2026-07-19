@@ -688,7 +688,8 @@ def pca_fake_quant_kv(k, v):
     # full precision (literature-standard; amortized in BPE accounting).
     sink = int(os.environ.get("PCA_SINK_T", "0"))
     ev0 = PCA_N_LAYERS > 0 and (call_idx // PCA_N_LAYERS) == 0
-    k_q = pca_fake_quant(k, PCA_KR or PCA_R, fixed_basis=kb)
+    with _res_grid_override("K"):
+        k_q = pca_fake_quant(k, PCA_KR or PCA_R, fixed_basis=kb)
     if sink > 0 and ev0:
         k_q[:, :, :sink] = k[:, :, :sink]
     if PCA_V_MODE == "klt":                                          # N17a
@@ -732,7 +733,8 @@ def pca_fake_quant_kv(k, v):
                     vq = torch.einsum("bhsnd,hde->bhsne", vq, Winv.to(v.device))
                 v_q = vq.reshape(B, H, S, D).to(v.dtype)
     else:
-        v_q = pca_fake_quant(v, (PCA_VR or PCA_R) if PCA_V_MODE == "pca" else 0)
+        with _res_grid_override("V"):
+            v_q = pca_fake_quant(v, (PCA_VR or PCA_R) if PCA_V_MODE == "pca" else 0)
     if sink > 0 and ev0:
         v_q[:, :, :sink] = v[:, :, :sink]
     return k_q, v_q
