@@ -21,7 +21,11 @@ PCA_KR = int(os.environ.get("PCA_KR", "0")) or None   # K-side rank override
 PCA_VR = int(os.environ.get("PCA_VR", "0")) or None   # V-side rank override
 PCA_COEFF_BITS = int(os.environ.get("PCA_COEFF_BITS", "2"))
 PCA_RES_GRID = os.environ.get("PCA_RES_GRID", "ternary")
-RES_AXIS = os.environ.get("PCA_RES_AXIS", "token")  # token: group along D per token (default);
+RES_AXIS = os.environ.get("PCA_RES_AXIS", "token")
+RES_CHNORM = os.environ.get("PCA_RES_CHNORM", "0") == "1"  # per-channel sigma
+# normalization of the residual (fp per-channel scale per chunk, amortized ~0)
+# before the token-axis grid — captures KIVI's channel-heterogeneity benefit
+# without the channel-axis temporal banding.  # token: group along D per token (default);
 # channel: group along tokens per channel (KVQuant/KIVI insight — pre-RoPE K esp.)
 
 import contextlib
@@ -31,20 +35,22 @@ def _res_grid_override(which):
     """Per-tensor residual grid/block override: PCA_RES_GRID_K/_V, PCA_RES_BLOCK_K/_V.
     Mixed grids (e.g. K asym + V ternary) stay BPE-legal: ternary counted at 2 bits
     (QVG-symmetric accounting), block overheads averaged across K/V."""
-    global PCA_RES_GRID, RES_BLOCK, RES_AXIS
+    global PCA_RES_GRID, RES_BLOCK, RES_AXIS, RES_CHNORM
     g = os.environ.get(f"PCA_RES_GRID_{which}", "")
     b = os.environ.get(f"PCA_RES_BLOCK_{which}", "")
     a = os.environ.get(f"PCA_RES_AXIS_{which}", "")
-    if not g and not b and not a:
+    c = os.environ.get(f"PCA_RES_CHNORM_{which}", "")
+    if not g and not b and not a and not c:
         yield; return
-    prev_g, prev_b, prev_a = PCA_RES_GRID, RES_BLOCK, RES_AXIS
+    prev = (PCA_RES_GRID, RES_BLOCK, RES_AXIS, RES_CHNORM)
     if g: PCA_RES_GRID = g
     if b: RES_BLOCK = int(b)
     if a: RES_AXIS = a
+    if c: RES_CHNORM = c == "1"
     try:
         yield
     finally:
-        PCA_RES_GRID, RES_BLOCK, RES_AXIS = prev_g, prev_b, prev_a
+        PCA_RES_GRID, RES_BLOCK, RES_AXIS, RES_CHNORM = prev
 PCA_V_MODE = os.environ.get("PCA_V_MODE", "mean")
 RES_BLOCK = int(os.environ.get("PCA_RES_BLOCK", "64"))
 K_BASIS_FILE = os.environ.get("PCA_K_BASIS_FILE", "")
@@ -113,7 +119,13 @@ PCA_EVENT_SCHED = os.environ.get("PCA_EVENT_SCHED", "")
 _EVENT_IDX = [0]
 
 
-def _quant_residual(x):
+def _quant_residual(x, _chnorm_done=False):
+    if RES_CHNORM and not _chnorm_done:
+        # x: [BH, S, D] — equalize per-channel std over this chunk, then quantize
+        # the normalized residual on the standard (token-axis) grid.
+        sd = x.float().std(dim=-2, keepdim=True).clamp_min(1e-6)   # [BH,1,D]
+        q = _quant_residual((x / sd).to(x.dtype), _chnorm_done=True)
+        return (q * sd).to(x.dtype)
     if PCA_EVENT_SCHED:
         first, later = PCA_EVENT_SCHED.split(":")
         if _EVENT_IDX[0] == 0:

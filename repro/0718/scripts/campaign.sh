@@ -64,6 +64,12 @@ apply_variant() {  # $1 = arm string like pcar6 / pcaa128 / pcavmean / pcar6vmea
     *kb64*)  export PCA_RES_BLOCK_K=64 ;;
   esac
   case $1 in
+    *chnk*)  export PCA_RES_CHNORM_K=1 ;;
+  esac
+  case $1 in
+    *chnv*)  export PCA_RES_CHNORM_V=1 ;;
+  esac
+  case $1 in
     *vax*)   export PCA_RES_AXIS_V=channel ;;
   esac
   case $1 in
