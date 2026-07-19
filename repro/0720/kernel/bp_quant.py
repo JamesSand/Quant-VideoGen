@@ -136,6 +136,81 @@ def _topr_basis(cov, r, method="subspace", iters=5):
     return V
 
 
+_CORE_CACHE = {}
+
+
+def _get_encode_core(grid, axis, r, block, iters=5):
+    key = (grid, axis, r, block, iters)
+    if key in _CORE_CACHE:
+        return _CORE_CACHE[key]
+
+    def core(X):
+        BH, S, D = X.shape
+        mu = X.mean(dim=1, keepdim=True)
+        Xc = X - mu
+        Xb = Xc.to(torch.bfloat16)
+        cov = torch.baddbmm(torch.zeros(1, device=X.device, dtype=torch.bfloat16),
+                            Xb.transpose(1, 2), Xb, beta=0).float() / S
+        V = cov[:, :, :r].clone()
+        for _ in range(iters):
+            V = cov @ V
+            G = V.transpose(1, 2) @ V
+            G = G + 1e-6 * torch.eye(r, device=V.device, dtype=V.dtype) * G.diagonal(dim1=-2, dim2=-1).amax(-1)[:, None, None]
+            Lc = torch.linalg.cholesky(G)
+            V = torch.linalg.solve_triangular(Lc, V.transpose(1, 2), upper=False).transpose(1, 2)
+        c = torch.bmm(Xc, V)
+        mn = c.amin(-1, keepdim=True); mx = c.amax(-1, keepdim=True)
+        cs = ((mx - mn) / 3).clamp_min(1e-8).to(FP8).float().clamp_min(1e-8)
+        cz = mn.to(FP8).float()
+        cq = torch.clamp(torch.round((c - cz) / cs), 0, 3)
+        c_hat = cq * cs + cz
+        res = Xc - torch.bmm(c_hat, V.transpose(1, 2))
+        cq8 = cq.to(torch.uint8)
+        if r % 4:
+            cq8 = torch.nn.functional.pad(cq8, (0, 4 - r % 4))
+        cqf = cq8.reshape(BH, S, -1, 4)
+        coef_pack = cqf[..., 0] | (cqf[..., 1] << 2) | (cqf[..., 2] << 4) | (cqf[..., 3] << 6)
+        t2 = res.transpose(1, 2) if axis == "channel" else res
+        L = t2.shape[-1]
+        pad = (block - L % block) % block
+        t3 = torch.nn.functional.pad(t2, (0, pad))
+        tb = t3.reshape(t2.shape[0], t2.shape[1], -1, block)
+        if grid == "ternary":
+            sc = tb.abs().amax(-1, keepdim=True).clamp_min(1e-8).to(FP8).float().clamp_min(1e-8)
+            q = (torch.clamp(torch.round(tb / sc), -1, 1) + 1).to(torch.uint8)
+            zp8 = None
+        else:
+            mn2 = tb.amin(-1, keepdim=True); mx2 = tb.amax(-1, keepdim=True)
+            sc = ((mx2 - mn2) / 3).clamp_min(1e-8).to(FP8).float().clamp_min(1e-8)
+            zp = mn2.to(FP8).float()
+            q = torch.clamp(torch.round((tb - zp) / sc), 0, 3).to(torch.uint8)
+            zp8 = zp.squeeze(-1).to(FP8)
+        qf = q.reshape(t2.shape[0], t2.shape[1], -1, 4)
+        packed = qf[..., 0] | (qf[..., 1] << 2) | (qf[..., 2] << 4) | (qf[..., 3] << 6)
+        return (mu.to(torch.bfloat16), V.to(torch.bfloat16), coef_pack.squeeze(-2) if coef_pack.shape[-2] == 1 else coef_pack.reshape(BH, S, -1),
+                cs.squeeze(-1).to(FP8), cz.squeeze(-1).to(FP8),
+                packed, sc.squeeze(-1).to(FP8), zp8)
+
+    fn = torch.compile(core, dynamic=False) if _COMPILE else core
+    _CORE_CACHE[key] = fn
+    return fn
+
+
+@torch.no_grad()
+def bp_encode_fast(x, r=4, grid="asym", block=128, axis="token", iters=5):
+    """Whole-graph compiled encode (r>0 only)."""
+    B, H, S, D = x.shape
+    core = _get_encode_core(grid, axis, r, block, iters)
+    mu, V, coef_pack, cs8, cz8, packed, sc8, zp8 = core(x.reshape(B * H, S, D).float())
+    L = S if axis == "channel" else D
+    pad = (block - L % block) % block
+    out = {"shape": (B, H, S, D), "r": r, "grid": grid, "block": block, "axis": axis,
+           "mu": mu, "basis": V, "coef_pack": coef_pack.reshape(B * H, S, -1),
+           "coef_scale": cs8, "coef_zp": cz8,
+           "res_pack": packed, "res_scale": sc8, "res_zp": zp8, "res_g": block, "res_pad": pad}
+    return out
+
+
 @torch.no_grad()
 def bp_encode(x, r=4, grid="asym", block=128, axis="token",
               basis_method="subspace", coef_bits=2):

@@ -8,7 +8,7 @@ import torch
 os.chdir("/home/zhizhousha/workspace/video-project/Quant-VideoGen")
 sys.path.insert(0, "repro/0720/kernel")
 sys.path.insert(0, ".")
-from bp_quant import bp_encode, bp_decode, bp_encode_packed256, bp_decode_packed256, bp_bytes
+from bp_quant import bp_encode, bp_encode_fast, bp_decode, bp_encode_packed256, bp_decode_packed256, bp_bytes
 from quant_videogen.functions import triton_prq_quantize_tensor, triton_prq_dequantize_tensor
 
 NCH = int(sys.argv[1]) if len(sys.argv) > 1 else 3
@@ -60,9 +60,12 @@ for model in ("lc", "sf", "hy"):
         q_rel = rel_l2(dk, k)
         # ---- ours ----
         if model == "hy":
-            enc_k = lambda: bp_encode_packed256(k, r_h1=9, r_h2=0, grid="asym", block=64,
-                                                axis="channel", grid_h2="ternary", block_h2=64)
-            enc_v = lambda: bp_encode_packed256(v, r_h1=9, r_h2=0, grid="asym", block=128, axis="token", grid_h2="asym", block_h2=128)
+            k1, k2 = k[..., :128].contiguous(), k[..., 128:].contiguous()
+            v1, v2 = v[..., :128].contiguous(), v[..., 128:].contiguous()
+            def enc_k(): return {"halves": (bp_encode_fast(k1, r=9, grid="asym", block=64, axis="channel"),
+                                            bp_encode(k2, r=0, grid="ternary", block=64, axis="channel"))}
+            def enc_v(): return {"halves": (bp_encode_fast(v1, r=9, grid="asym", block=128, axis="token"),
+                                            bp_encode(v2, r=0, grid="asym", block=128, axis="token"))}
             def ours_enc(): enc_k(); enc_v()
             ek, ev = enc_k(), enc_v()
             def ours_dec(): bp_decode_packed256(ek); bp_decode_packed256(ev)
@@ -70,8 +73,8 @@ for model in ("lc", "sf", "hy"):
             nbytes = bp_bytes(ek) + bp_bytes(ev)
         else:
             cfg = CFG[model]["ours"]
-            def ours_enc(): bp_encode(k, **cfg); bp_encode(v, **cfg)
-            ek, ev = bp_encode(k, **cfg), bp_encode(v, **cfg)
+            def ours_enc(): bp_encode_fast(k, **cfg); bp_encode_fast(v, **cfg)
+            ek, ev = bp_encode_fast(k, **cfg), bp_encode_fast(v, **cfg)
             def ours_dec(): bp_decode(ek); bp_decode(ev)
             dec_k = bp_decode(ek)
             nbytes = bp_bytes(ek) + bp_bytes(ev)
