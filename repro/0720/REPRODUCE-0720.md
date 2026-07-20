@@ -11,8 +11,8 @@
 | 交付物 | 文档 | 生成脚本 | 预期核心数字 |
 |---|---|---|---|
 | 终表(质量) | [mp100-table.md](mp100-table.md) | `repro/0718/scripts/{campaign,gpu_queue}.sh` → `repro/0720/score_fp8.py` → `aggregate_fp8.py` | LC 31.68/0.9370/0.0547;SF 四维全第一;HY 18.77 |
-| BPE 审计 | [bpe-audit.md](bpe-audit.md) | `repro/0720/kernel/bpe_audit.py` | LC 2.3192 / SF 2.3183 / HY cache 2.3250(全 ≤2.326) |
-| 速度对决 | [kernel-results.md](kernel-results.md) | `repro/0720/kernel/bench_speed.py` | encode LC 32.5× / HY 1.4× / SF 1.1× 快过 kmeans |
+| BPE 审计 | [bpe-audit.md](bpe-audit.md) | `repro/0720/kernel/bpe_audit.py` | LC 2.3195 / SF 2.3185 / HY cache 2.3256(全 ≤2.326;QVG 同口径 2.464/2.406/3.320) |
+| 速度对决 | [kernel-results.md](kernel-results.md) | `repro/0720/kernel/bench_speed.py` | encode LC 32.5× / HY 1.3-1.4× / SF 1.0-1.1× 快过 kmeans |
 | why 判决 | [why-budget-pca-wins.md](why-budget-pca-wins.md)(成立假说)+ [why-refuted-and-errata.md](why-refuted-and-errata.md)(负结果台账) | `repro/0720/why/*.py`(§7) | 格效率差 ~2.2×;H1 原命题证伪 24/24;H4 平坦 |
 | 方法讲解 | [method-explainer.md](method-explainer.md) | — | (读物,行号可点击) |
 | paper 差异盘点 | [paper-diff-plan.md](paper-diff-plan.md) | `repro/0720/{score_e1,vbench_official}.py` | 四类差异全部定位到 paper 侧 |
@@ -51,9 +51,9 @@ source repro/backup/scripts/env_fix.sh                        # 必须:TRITON_PT
 
 | 模型 | 终版臂名 | 关键 env | BPE(审计值) |
 |---|---|---|---|
-| LC | `pcakaxvaxfp8` | `PCA_R=4 PCA_RES_GRID=asym PCA_RES_BLOCK=128 PCA_V_MODE=pca PCA_RES_AXIS_K=channel PCA_RES_AXIS_V=channel PCA_FP8SIM=1` | 2.3192 |
-| SF | `pcaa128kaxvaxfp8` | 同 LC + `PCA_SF_STORE_FIX=1` | 2.3183 |
-| HY | `pcav90kpternkaxkb64fp8` | LC 基础 + `PCA_HALF_R_K=9,0 PCA_HALF_R_V=9,0 PCA_RES_BLOCK_K=64 PCA_RES_GRID_KP=ternary PCA_RES_BLOCK_KP=64` | 2.3250(cache 级) |
+| LC | `pcakaxvaxfp8` | `PCA_R=4 PCA_RES_GRID=asym PCA_RES_BLOCK=128 PCA_V_MODE=pca PCA_RES_AXIS_K=channel PCA_RES_AXIS_V=channel PCA_FP8SIM=1` | 2.3195 |
+| SF | `pcaa128kaxvaxfp8` | 同 LC + `PCA_SF_STORE_FIX=1` | 2.3185 |
+| HY | `pcav90kpternkaxkb64fp8` | LC 基础 + `PCA_HALF_R_K=9,0 PCA_HALF_R_V=9,0 PCA_RES_BLOCK_K=64 PCA_RES_GRID_KP=ternary PCA_RES_BLOCK_KP=64` | 2.3256(cache 级) |
 
 臂名后缀 → env 的映射逻辑在 `campaign.sh::apply_variant`(子串匹配,新增变体注意
 子串碰撞,见 §9)。baseline 臂:`rtnfp8` / `kivifp8` / `quarot` / `qvg`
@@ -126,14 +126,14 @@ SF 93.21/66.65/88.69/53.27;vs QVG = 11 显著胜 + 7 平 + 0 负。
 `bp_triton.py`(Triton fused decode)。
 
 ```bash
-# 门 1:BPE 逐字节审计(数 bytes,不是公式)——预期 LC 2.3192/SF 2.3183/HY 2.3250
+# 门 1:BPE 逐字节审计(数 bytes,不是公式)——预期 LC 2.3195/SF 2.3185/HY 2.3256(归一因子已入账)
 CUDA_VISIBLE_DEVICES=0 .venv/bin/python repro/0720/kernel/bpe_audit.py
 # 门 2+3:速度对决(vs QVG triton kmeans,同输入 CUDA-event 计时)+ fake↔kernel 等价
 CUDA_VISIBLE_DEVICES=0 .venv/bin/python repro/0720/kernel/bench_speed.py
 ```
 
-预期:encode LC 32.5×/HY 1.4×/SF 1.1× 快;combined LC 27.3×/HY 1.16×/SF ~平
-(0.95-1.10 波动);fake↔kernel relL2 差 ≤1.1%;Triton decode 与 reference 逐位一致。
+预期:encode LC ~32×/HY 1.3-1.4×/SF 1.0-1.1× 快;combined LC 27.3×/HY 1.16×/SF ~平
+(0.95-1.10 波动);fake↔kernel relL2 差 ≤1.1%;Triton decode 与 reference 数值等价 ≤1 ulp(max|Δ| 0.0625/0.03125)。
 结果落 `repro/0720/kernel/bench_report.json`,汇总解读在 [kernel-results.md](kernel-results.md)。
 
 ## 7. Why 判决(机制分析,需要 §2 的 dump chunks)

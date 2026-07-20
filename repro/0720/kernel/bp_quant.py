@@ -177,6 +177,8 @@ def _get_encode_core(grid, axis, r, block, iters=5, cmode=None):
             if grid == "ternary":
                 sc0 = tb.abs().amax(-1, keepdim=True).clamp_min(1e-8)
                 f_sc = _fmax(sc0)
+                if _dims:  # channel axis: single pow2 factor/channel (int8 exponent storage)
+                    f_sc = torch.exp2(torch.ceil(torch.log2(f_sc)))
                 sc = ((sc0 / f_sc).to(FP8).float() * f_sc).clamp_min(1e-8)
                 qv = (torch.clamp(torch.round(tb / sc), -1, 1) + 1).to(torch.uint8)
                 zp8 = None
@@ -185,8 +187,10 @@ def _get_encode_core(grid, axis, r, block, iters=5, cmode=None):
                 mn2 = tb.amin(-1, keepdim=True); mx2 = tb.amax(-1, keepdim=True)
                 sc0 = ((mx2 - mn2) / 3).clamp_min(1e-8)
                 f_sc = _fmax(sc0)
-                sc = ((sc0 / f_sc).to(FP8).float() * f_sc).clamp_min(1e-8)
                 f_zp = _fmax(mn2)
+                if _dims:  # channel axis: single shared pow2 factor/channel
+                    f_sc = f_zp = torch.exp2(torch.ceil(torch.log2(torch.maximum(f_sc, f_zp))))
+                sc = ((sc0 / f_sc).to(FP8).float() * f_sc).clamp_min(1e-8)
                 zp = (mn2 / f_zp).to(FP8).float() * f_zp
                 qv = torch.clamp(torch.round((tb - zp) / sc), 0, 3).to(torch.uint8)
                 zp8 = (zp / f_zp).squeeze(-1).to(FP8)
@@ -229,6 +233,8 @@ def _get_encode_core(grid, axis, r, block, iters=5, cmode=None):
         if grid == "ternary":
             sc0 = tb.abs().amax(-1, keepdim=True).clamp_min(1e-8)
             f_sc = _fmax(sc0)
+            if _dims:  # channel axis: single pow2 factor/channel (int8 exponent storage)
+                f_sc = torch.exp2(torch.ceil(torch.log2(f_sc)))
             sc = ((sc0 / f_sc).to(FP8).float() * f_sc).clamp_min(1e-8)
             q = (torch.clamp(torch.round(tb / sc), -1, 1) + 1).to(torch.uint8)
             zp8 = None
@@ -237,8 +243,10 @@ def _get_encode_core(grid, axis, r, block, iters=5, cmode=None):
             mn2 = tb.amin(-1, keepdim=True); mx2 = tb.amax(-1, keepdim=True)
             sc0 = ((mx2 - mn2) / 3).clamp_min(1e-8)
             f_sc = _fmax(sc0)
-            sc = ((sc0 / f_sc).to(FP8).float() * f_sc).clamp_min(1e-8)
             f_zp = _fmax(mn2)
+            if _dims:  # channel axis: single shared pow2 factor/channel
+                f_sc = f_zp = torch.exp2(torch.ceil(torch.log2(torch.maximum(f_sc, f_zp))))
+            sc = ((sc0 / f_sc).to(FP8).float() * f_sc).clamp_min(1e-8)
             zp = (mn2 / f_zp).to(FP8).float() * f_zp
             q = torch.clamp(torch.round((tb - zp) / sc), 0, 3).to(torch.uint8)
             zp8 = (zp / f_zp).squeeze(-1).to(FP8)
@@ -276,7 +284,8 @@ def bp_encode_fast(x, r=4, grid="asym", block=128, axis="token", iters=5, cmode=
               "mu": mu, "res_pack": packed, "res_scale": sc8, "res_zp": zp8,
               "res_g": block, "res_pad": pad}
         if axis == "channel":
-            d0["f_sc_t"] = f_sc.reshape(B * H, -1); d0["f_zp_t"] = f_zp.reshape(B * H, -1)
+            # single pow2 factor/channel -> exact int8 exponent (真实存储,入审计)
+            d0["f_exp"] = torch.log2(f_sc.reshape(B * H, -1)).round().to(torch.int8)
         else:
             d0["f_sc"] = float(f_sc); d0["f_zp"] = float(f_zp)
         return d0
@@ -288,7 +297,8 @@ def bp_encode_fast(x, r=4, grid="asym", block=128, axis="token", iters=5, cmode=
            "res_pack": packed, "res_scale": sc8, "res_zp": zp8, "res_g": block, "res_pad": pad,
            "f_cs": float(f_cs), "f_cz": float(f_cz)}
     if axis == "channel":
-        out["f_sc_t"] = f_sc.reshape(B * H, -1); out["f_zp_t"] = f_zp.reshape(B * H, -1)
+        # single pow2 factor/channel -> exact int8 exponent (真实存储,入审计)
+        out["f_exp"] = torch.log2(f_sc.reshape(B * H, -1)).round().to(torch.int8)
     else:
         out["f_sc"] = float(f_sc); out["f_zp"] = float(f_zp)
     return out
@@ -371,8 +381,10 @@ def bp_decode(d, dtype=torch.bfloat16):
                           d["res_scale"].reshape(B * H, rows, Lp // g),
                           (d["res_zp"] if not tern else d["res_scale"]).reshape(B * H, rows, Lp // g),
                           tern, g, L, d["mu"], c_hat, d.get("basis"),
-                          d["f_sc_t"].float().unsqueeze(-1) if "f_sc_t" in d else d.get("f_sc", 1.0),
-                          d["f_zp_t"].float().unsqueeze(-1) if "f_zp_t" in d else d.get("f_zp", 1.0))
+                          torch.exp2(d["f_exp"].float()).unsqueeze(-1) if "f_exp" in d else
+                          (d["f_sc_t"].float().unsqueeze(-1) if "f_sc_t" in d else d.get("f_sc", 1.0)),
+                          torch.exp2(d["f_exp"].float()).unsqueeze(-1) if "f_exp" in d else
+                          (d["f_zp_t"].float().unsqueeze(-1) if "f_zp_t" in d else d.get("f_zp", 1.0)))
         out = out.reshape(B, H, S, D)
         return out if dtype == torch.bfloat16 else out.to(dtype)
     res = _dq_res(d["res_pack"].reshape(B * H, rows, Lp // 4),
@@ -408,8 +420,12 @@ def bp_bytes(d):
     if "halves" in d:
         return sum(bp_bytes(h) for h in d["halves"])
     n = 0
-    for k in ("mu", "basis", "coef_pack", "coef_scale", "coef_zp", "res_pack", "res_scale", "res_zp"):
+    for k in ("mu", "basis", "coef_pack", "coef_scale", "coef_zp",
+              "res_pack", "res_scale", "res_zp",
+              "f_exp", "f_sc_t", "f_zp_t"):   # 归一化因子必须入账(0720 外审勘误)
         t = d.get(k)
         if torch.is_tensor(t):
             n += t.numel() * t.element_size()
+    # token 轴/系数的标量因子(fp32 各 4 字节)也如实入账
+    n += 4 * sum(1 for k in ("f_cs", "f_cz", "f_sc", "f_zp") if k in d)
     return n

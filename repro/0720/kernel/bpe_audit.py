@@ -24,8 +24,10 @@ def comp_bits(d, numel):
             t = d.get(k)
             if torch.is_tensor(t): n += t.numel() * t.element_size()
         return n * 8 / numel
+    scalars = 4 * 8 / numel * sum(1 for k in ("f_cs", "f_cz", "f_sc", "f_zp") if k in d)
     return dict(codes=b("res_pack"), scales=b("res_scale", "res_zp"),
                 coef=b("coef_pack"), coef_meta=b("coef_scale", "coef_zp"),
+                factors=b("f_exp", "f_sc_t", "f_zp_t") + scalars,  # 归一化因子入账(0720 外审勘误)
                 amort=b("mu", "basis"))
 
 def audit_tensor(name, x, cfgs, assert_budget=True):
@@ -67,7 +69,7 @@ for model, cfgk, cfgv, n_ch in (("lc", LC_CFG, LC_CFG, 3), ("sf", SF_CFG, SF_CFG
         bv = audit_tensor(f"{model} chunk{ci} V", d["v"].float(), cfgv, assert_budget=False)
         cache_bpe = (bk + bv) / 2
         ok = cache_bpe <= BUDGET
-        rows.append((f"{model} chunk{ci} **KV合并(判定口径)**", cache_bpe, {"codes":0,"scales":0,"coef":0,"coef_meta":0,"amort":0}, ok))
+        rows.append((f"{model} chunk{ci} **KV合并(判定口径)**", cache_bpe, {"codes":0,"scales":0,"coef":0,"coef_meta":0,"factors":0,"amort":0}, ok))
         if not ok: fails.append(f"{model} chunk{ci}: cache BPE {cache_bpe:.4f} > {BUDGET}")
 
 # fake-vs-kernel equivalence on real chunks (final configs)
@@ -97,11 +99,12 @@ for model, env, enc in (
         fails.append(f"{model}: fake/kernel relL2 mismatch {rf:.5f} vs {rk:.5f}")
 
 out = ["# BPE 硬审计(真 kernel 逐字节;预算 2.326)\n",
-       "| 张量 | 实测 BPE | codes | scales | coef | coef_meta | μ/基摊销 | 合规 |",
-       "|---|---|---|---|---|---|---|---|"]
+       "| 张量 | 实测 BPE | codes | scales | coef | coef_meta | 归一因子 | μ/基摊销 | 合规 |",
+       "|---|---|---|---|---|---|---|---|---|"]
 for name, bpe, c, ok in rows:
     out.append(f"| {name} | **{bpe:.4f}** | {c['codes']:.3f} | {c['scales']:.3f} | "
-               f"{c['coef']:.4f} | {c['coef_meta']:.4f} | {c['amort']:.4f} | {'✓' if ok else '✗ 超预算'} |")
+               f"{c['coef']:.4f} | {c['coef_meta']:.4f} | {c.get('factors', 0):.4f} | "
+               f"{c['amort']:.4f} | {'✓' if ok else '✗ 超预算'} |")
 out.append("\n## fake 路径(出表)vs kernel(实测)一致性(同 chunk relL2)\n")
 out.append("| 模型 | fake relL2 | kernel relL2 | 相对偏差 |")
 out.append("|---|---|---|---|")

@@ -116,8 +116,12 @@ def triton_decode(d, c_hat=None, out=None, d_offset=0, out_D=None):
     BS, BD = 64, 64
     grid = (BH, triton.cdiv(S, BS), triton.cdiv(D, BD))
     if ax_ch:
-        fsc = d["f_sc_t"].reshape(BH, D).float().contiguous() if "f_sc_t" in d else torch.full((BH, D), d.get("f_sc", 1.0), device=out.device)
-        fzp = d["f_zp_t"].reshape(BH, D).float().contiguous() if "f_zp_t" in d else torch.full((BH, D), d.get("f_zp", 1.0), device=out.device)
+        if "f_exp" in d:  # 单 pow2 因子/通道(int8 指数,0720 记账修正后的存储形态)
+            fsc = torch.exp2(d["f_exp"].reshape(BH, D).float()).contiguous()
+            fzp = fsc
+        else:
+            fsc = d["f_sc_t"].reshape(BH, D).float().contiguous() if "f_sc_t" in d else torch.full((BH, D), d.get("f_sc", 1.0), device=out.device)
+            fzp = d["f_zp_t"].reshape(BH, D).float().contiguous() if "f_zp_t" in d else torch.full((BH, D), d.get("f_zp", 1.0), device=out.device)
         _dq_ch[grid](pack, sc, zp, mu, chat, basis, out, fsc, fzp,
                      S, D, Lp // 4, Lp // g, OD, d_offset, g, r, tern, BS, BD)
     else:

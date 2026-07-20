@@ -10,12 +10,22 @@ SHARD, NSH = int(sys.argv[1]), int(sys.argv[2])
 PY = ".venv/bin/python"
 os.environ["VBENCH4_CACHE"] = f"repro/0718/npz/vbench4_shard{SHARD}.json"
 
-LC_ARMS = ["bf16", "rtn", "kivi", "quarot", "qvg", "pcakaxvaxfp8"]
-SF_ARMS = ["bf16", "rtn", "kivi", "quarot", "qvg", "pcaa128kaxvaxfp8"]
+# 0720 外审勘误④:LC/SF baseline 必须用诚实重赛臂(rtnfp8/kivifp8)——
+# 磁盘上同时存在污染期旧目录 rtn_rep0/kivi_rep0,旧臂名会静默评到作废数据。
+LC_ARMS = ["bf16", "rtnfp8", "kivifp8", "quarot", "qvg", "pcakaxvaxfp8"]
+SF_ARMS = ["bf16", "rtnfp8", "kivifp8", "quarot", "qvg", "pcaa128kaxvaxfp8"]
 HY_ARMS = ["bf16", "rtn", "kivi", "quarot", "qvg", "pcav90kpternkaxkb64fp8"]
 
 def g1(p):
     g = glob.glob(p); return g[0] if g else None
+
+def hy_dir(arm, s):
+    """HY 的 10-seed 数据生成于命名空间引入之前,历史位置在 multiprompt/hy/;
+    新跑(CAMPAIGN_NS=mp100)落 mp100/hy/。两处都找,mp100 优先。"""
+    for base in ("results/multiprompt/mp100/hy", "results/multiprompt/hy"):
+        p = f"{base}/{arm}_s{s}/0-{s}.mp4"
+        if os.path.exists(p): return p
+    return None
 
 jobs = []  # (kind, payload)
 for p in range(1, 101):
@@ -30,12 +40,12 @@ for p in range(1, 101):
         v = g1(f"results/multiprompt/mp100/sf/{arm}_rep0_f180/p{p}/*.mp4")
         if v: jobs.append(("vb", (v, 700)))
 for s in range(10):
-    ref = f"results/multiprompt/hy/bf16_s{s}/0-{s}.mp4"
+    ref = hy_dir("bf16", s)
     for arm in HY_ARMS:
-        v = f"results/multiprompt/hy/{arm}_s{s}/0-{s}.mp4"
-        if not os.path.exists(v): continue
+        v = hy_dir(arm, s)
+        if not v: continue
         jobs.append(("vb", (v, 0)))
-        if arm != "bf16" and os.path.exists(ref):
+        if arm != "bf16" and ref:
             jobs.append(("ref", (ref, v, f"hy_s{s}_{arm}")))
 
 mine = [j for i, j in enumerate(jobs) if i % NSH == SHARD]

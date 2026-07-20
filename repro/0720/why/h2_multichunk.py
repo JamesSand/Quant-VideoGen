@@ -16,12 +16,15 @@ from quant_videogen.kmeans.kmeans_euclid import batch_kmeans_Euclid
 from quant_videogen.sim.quant.lowbit_quantize import blockwise_int2_quantize_triton
 
 ITERS = {"lc": 100, "sf": 2, "hy": 2}
+# PCA_FP8SIM=1:终版臂全带 fp8,机制数字必须同口径(0720 外审勘误⑤)
 CFG = {
-    "lc": dict(PCA_R="4", PCA_RES_GRID="asym", PCA_RES_BLOCK="128", PCA_RES_AXIS_K="channel"),
-    "sf": dict(PCA_R="4", PCA_RES_GRID="asym", PCA_RES_BLOCK="128", PCA_RES_AXIS_K="channel"),
+    "lc": dict(PCA_R="4", PCA_RES_GRID="asym", PCA_RES_BLOCK="128", PCA_RES_AXIS_K="channel",
+               PCA_FP8SIM="1"),
+    "sf": dict(PCA_R="4", PCA_RES_GRID="asym", PCA_RES_BLOCK="128", PCA_RES_AXIS_K="channel",
+               PCA_FP8SIM="1"),
     "hy": dict(PCA_R="4", PCA_HALF_R_K="9,0", PCA_RES_GRID="asym", PCA_RES_BLOCK="128",
                PCA_RES_AXIS_K="channel", PCA_RES_BLOCK_K="64",
-               PCA_RES_GRID_KP="ternary", PCA_RES_BLOCK_KP="64"),
+               PCA_RES_GRID_KP="ternary", PCA_RES_BLOCK_KP="64", PCA_FP8SIM="1"),
 }
 
 def qvg_recon(k, iters):
