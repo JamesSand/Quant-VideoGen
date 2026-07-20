@@ -1,4 +1,9 @@
-> 与 QVG paper Table 1 的数字差异盘点与排查:[paper-diff-plan.md](paper-diff-plan.md)
+> 与 QVG paper Table 1 的数字差异盘点与排查:[paper-diff-plan.md](paper-diff-plan.md)。
+> 四类差异已全部定位(0720 终局):paper 的 LC baseline 低 ~10dB = 其实现弱
+> (三点位格+post-RoPE,E1 复现至 ±1-3dB);HY 高 7-12dB = PSNR 窗口口径(发散前窗);
+> VBench 水位差 = 我们 AQ 重实现比官方包低 ~4.7 分(BC/IQ/SC 与官方 ±0.4 一致,
+> 同尺同刻不影响方法间结论);paper 的 baseline VBench 崩坏在官方包上也复现不出
+> ——是其 baseline 视频真实地坏,非打分器。QVG 本尊行 −0.5dB 一致 = 我们管线无恙。
 
 # MP100 定案表(QVG Table-1 指标集,MovieGen 随机 100 prompts,seed=42)
 

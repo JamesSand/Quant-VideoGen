@@ -1,0 +1,37 @@
+{
+    "background_consistency": [
+        0.9346958705357142,
+        [
+            {
+                "video_path": "/tmp/claude-1001/-home-zhizhousha-workspace-video-project/4fb6e620-a325-4b3c-8f86-3fcd80917455/scratchpad/e2b_vids/kivipaperfp8/p1.mp4",
+                "video_results": 0.9735695975167411,
+                "video_sim": 109.039794921875,
+                "cnt_per_video": 112
+            },
+            {
+                "video_path": "/tmp/claude-1001/-home-zhizhousha-workspace-video-project/4fb6e620-a325-4b3c-8f86-3fcd80917455/scratchpad/e2b_vids/kivipaperfp8/p3.mp4",
+                "video_results": 0.9622628348214286,
+                "video_sim": 107.7734375,
+                "cnt_per_video": 112
+            },
+            {
+                "video_path": "/tmp/claude-1001/-home-zhizhousha-workspace-video-project/4fb6e620-a325-4b3c-8f86-3fcd80917455/scratchpad/e2b_vids/kivipaperfp8/p2.mp4",
+                "video_results": 0.8678610665457589,
+                "video_sim": 97.200439453125,
+                "cnt_per_video": 112
+            },
+            {
+                "video_path": "/tmp/claude-1001/-home-zhizhousha-workspace-video-project/4fb6e620-a325-4b3c-8f86-3fcd80917455/scratchpad/e2b_vids/kivipaperfp8/p4.mp4",
+                "video_results": 0.9532666887555804,
+                "video_sim": 106.765869140625,
+                "cnt_per_video": 112
+            },
+            {
+                "video_path": "/tmp/claude-1001/-home-zhizhousha-workspace-video-project/4fb6e620-a325-4b3c-8f86-3fcd80917455/scratchpad/e2b_vids/kivipaperfp8/p5.mp4",
+                "video_results": 0.9165191650390625,
+                "video_sim": 102.650146484375,
+                "cnt_per_video": 112
+            }
+        ]
+    ]
+}

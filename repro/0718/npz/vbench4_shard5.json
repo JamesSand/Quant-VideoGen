@@ -1524,5 +1524,600 @@
 "AQ": 59.28,
 "IQ": 78.61,
 "n": 113
+},
+"results/multiprompt/mp100/lc/pcakaxvaxfp8_rep0/p1/1-0/segment_1.mp4::0": {
+"BC": 97.84,
+"SC": 96.41,
+"AQ": 64.21,
+"IQ": 67.87,
+"n": 113
+},
+"results/multiprompt/mp100/lc/rtnfp8_rep0/p5/5-0/segment_1.mp4::0": {
+"BC": 93.09,
+"SC": 89.34,
+"AQ": 58.61,
+"IQ": 73.07,
+"n": 113
+},
+"results/multiprompt/mp100/lc/kivifp8_rep0/p7/7-0/segment_1.mp4::0": {
+"BC": 92.96,
+"SC": 87.52,
+"AQ": 57.85,
+"IQ": 68.03,
+"n": 113
+},
+"results/multiprompt/mp100/lc/bf16_rep0/p8/8-0/segment_1.mp4::0": {
+"BC": 95.9,
+"SC": 92.19,
+"AQ": 62.87,
+"IQ": 60.51,
+"n": 113
+},
+"results/multiprompt/mp100/lc/pcakaxvaxfp8_rep0/p9/9-0/segment_1.mp4::0": {
+"BC": 96.95,
+"SC": 92.78,
+"AQ": 55.98,
+"IQ": 68.84,
+"n": 113
+},
+"results/multiprompt/mp100/lc/rtnfp8_rep0/p13/13-0/segment_1.mp4::0": {
+"BC": 97.55,
+"SC": 97.74,
+"AQ": 51.48,
+"IQ": 68.23,
+"n": 113
+},
+"results/multiprompt/mp100/lc/kivifp8_rep0/p15/15-0/segment_1.mp4::0": {
+"BC": 89.64,
+"SC": 82.13,
+"AQ": 56.54,
+"IQ": 68.92,
+"n": 113
+},
+"results/multiprompt/mp100/lc/bf16_rep0/p16/16-0/segment_1.mp4::0": {
+"BC": 96.94,
+"SC": 93.98,
+"AQ": 47.95,
+"IQ": 67.17,
+"n": 113
+},
+"results/multiprompt/mp100/lc/pcakaxvaxfp8_rep0/p17/17-0/segment_1.mp4::0": {
+"BC": 94.7,
+"SC": 89.08,
+"AQ": 58.49,
+"IQ": 76.26,
+"n": 113
+},
+"results/multiprompt/mp100/lc/rtnfp8_rep0/p21/21-0/segment_1.mp4::0": {
+"BC": 95.43,
+"SC": 92.1,
+"AQ": 53.46,
+"IQ": 72.7,
+"n": 113
+},
+"results/multiprompt/mp100/lc/kivifp8_rep0/p23/23-0/segment_1.mp4::0": {
+"BC": 94.23,
+"SC": 96.09,
+"AQ": 57.45,
+"IQ": 63.05,
+"n": 113
+},
+"results/multiprompt/mp100/lc/bf16_rep0/p24/24-0/segment_1.mp4::0": {
+"BC": 96.44,
+"SC": 96.35,
+"AQ": 59.12,
+"IQ": 72.18,
+"n": 113
+},
+"results/multiprompt/mp100/lc/pcakaxvaxfp8_rep0/p25/25-0/segment_1.mp4::0": {
+"BC": 97.65,
+"SC": 96.82,
+"AQ": 53.47,
+"IQ": 72.65,
+"n": 113
+},
+"results/multiprompt/mp100/lc/rtnfp8_rep0/p29/29-0/segment_1.mp4::0": {
+"BC": 88.33,
+"SC": 75.01,
+"AQ": 55.44,
+"IQ": 66.82,
+"n": 113
+},
+"results/multiprompt/mp100/lc/kivifp8_rep0/p31/31-0/segment_1.mp4::0": {
+"BC": 97.1,
+"SC": 97.88,
+"AQ": 49.92,
+"IQ": 70.01,
+"n": 113
+},
+"results/multiprompt/mp100/lc/bf16_rep0/p32/32-0/segment_1.mp4::0": {
+"BC": 91.86,
+"SC": 88.56,
+"AQ": 53.73,
+"IQ": 76.09,
+"n": 113
+},
+"results/multiprompt/mp100/lc/pcakaxvaxfp8_rep0/p33/33-0/segment_1.mp4::0": {
+"BC": 92.77,
+"SC": 91.79,
+"AQ": 50.52,
+"IQ": 76.69,
+"n": 113
+},
+"results/multiprompt/mp100/lc/rtnfp8_rep0/p37/37-0/segment_1.mp4::0": {
+"BC": 95.93,
+"SC": 95.98,
+"AQ": 49.07,
+"IQ": 68.11,
+"n": 113
+},
+"results/multiprompt/mp100/lc/kivifp8_rep0/p39/39-0/segment_1.mp4::0": {
+"BC": 95.0,
+"SC": 84.32,
+"AQ": 52.33,
+"IQ": 72.58,
+"n": 113
+},
+"results/multiprompt/mp100/lc/bf16_rep0/p40/40-0/segment_1.mp4::0": {
+"BC": 98.4,
+"SC": 96.88,
+"AQ": 58.3,
+"IQ": 77.74,
+"n": 113
+},
+"results/multiprompt/mp100/lc/pcakaxvaxfp8_rep0/p41/41-0/segment_1.mp4::0": {
+"BC": 91.82,
+"SC": 81.63,
+"AQ": 61.84,
+"IQ": 74.59,
+"n": 113
+},
+"results/multiprompt/mp100/lc/rtnfp8_rep0/p45/45-0/segment_1.mp4::0": {
+"BC": 90.76,
+"SC": 89.25,
+"AQ": 59.35,
+"IQ": 66.87,
+"n": 113
+},
+"results/multiprompt/mp100/lc/kivifp8_rep0/p47/47-0/segment_1.mp4::0": {
+"BC": 96.22,
+"SC": 94.6,
+"AQ": 54.02,
+"IQ": 65.95,
+"n": 113
+},
+"results/multiprompt/mp100/lc/bf16_rep0/p48/48-0/segment_1.mp4::0": {
+"BC": 95.51,
+"SC": 96.01,
+"AQ": 57.19,
+"IQ": 78.32,
+"n": 113
+},
+"results/multiprompt/mp100/lc/pcakaxvaxfp8_rep0/p49/49-0/segment_1.mp4::0": {
+"BC": 97.01,
+"SC": 91.94,
+"AQ": 56.9,
+"IQ": 73.27,
+"n": 113
+},
+"results/multiprompt/mp100/lc/rtnfp8_rep0/p53/53-0/segment_1.mp4::0": {
+"BC": 98.92,
+"SC": 98.23,
+"AQ": 63.8,
+"IQ": 72.42,
+"n": 113
+},
+"results/multiprompt/mp100/lc/kivifp8_rep0/p55/55-0/segment_1.mp4::0": {
+"BC": 96.19,
+"SC": 97.49,
+"AQ": 61.16,
+"IQ": 68.7,
+"n": 113
+},
+"results/multiprompt/mp100/lc/bf16_rep0/p56/56-0/segment_1.mp4::0": {
+"BC": 94.33,
+"SC": 89.18,
+"AQ": 56.84,
+"IQ": 72.02,
+"n": 113
+},
+"results/multiprompt/mp100/lc/pcakaxvaxfp8_rep0/p57/57-0/segment_1.mp4::0": {
+"BC": 98.69,
+"SC": 97.31,
+"AQ": 66.06,
+"IQ": 62.43,
+"n": 113
+},
+"results/multiprompt/mp100/lc/rtnfp8_rep0/p61/61-0/segment_1.mp4::0": {
+"BC": 95.61,
+"SC": 92.0,
+"AQ": 60.14,
+"IQ": 67.61,
+"n": 113
+},
+"results/multiprompt/mp100/lc/kivifp8_rep0/p63/63-0/segment_1.mp4::0": {
+"BC": 95.64,
+"SC": 85.34,
+"AQ": 53.09,
+"IQ": 65.17,
+"n": 113
+},
+"results/multiprompt/mp100/lc/bf16_rep0/p64/64-0/segment_1.mp4::0": {
+"BC": 88.64,
+"SC": 83.75,
+"AQ": 50.28,
+"IQ": 67.62,
+"n": 113
+},
+"results/multiprompt/mp100/lc/pcakaxvaxfp8_rep0/p65/65-0/segment_1.mp4::0": {
+"BC": 92.51,
+"SC": 91.07,
+"AQ": 51.55,
+"IQ": 69.13,
+"n": 113
+},
+"results/multiprompt/mp100/lc/rtnfp8_rep0/p69/69-0/segment_1.mp4::0": {
+"BC": 95.65,
+"SC": 96.58,
+"AQ": 59.18,
+"IQ": 72.8,
+"n": 113
+},
+"results/multiprompt/mp100/lc/kivifp8_rep0/p71/71-0/segment_1.mp4::0": {
+"BC": 97.18,
+"SC": 97.15,
+"AQ": 67.82,
+"IQ": 76.12,
+"n": 113
+},
+"results/multiprompt/mp100/lc/bf16_rep0/p72/72-0/segment_1.mp4::0": {
+"BC": 97.49,
+"SC": 94.69,
+"AQ": 55.9,
+"IQ": 61.2,
+"n": 113
+},
+"results/multiprompt/mp100/lc/pcakaxvaxfp8_rep0/p73/73-0/segment_1.mp4::0": {
+"BC": 95.38,
+"SC": 93.65,
+"AQ": 62.99,
+"IQ": 43.48,
+"n": 113
+},
+"results/multiprompt/mp100/lc/rtnfp8_rep0/p77/77-0/segment_1.mp4::0": {
+"BC": 97.38,
+"SC": 97.96,
+"AQ": 54.33,
+"IQ": 74.49,
+"n": 113
+},
+"results/multiprompt/mp100/lc/kivifp8_rep0/p79/79-0/segment_1.mp4::0": {
+"BC": 96.02,
+"SC": 93.36,
+"AQ": 58.39,
+"IQ": 72.05,
+"n": 113
+},
+"results/multiprompt/mp100/lc/bf16_rep0/p80/80-0/segment_1.mp4::0": {
+"BC": 96.7,
+"SC": 92.28,
+"AQ": 59.87,
+"IQ": 73.47,
+"n": 113
+},
+"results/multiprompt/mp100/lc/pcakaxvaxfp8_rep0/p81/81-0/segment_1.mp4::0": {
+"BC": 99.05,
+"SC": 95.19,
+"AQ": 57.42,
+"IQ": 76.9,
+"n": 113
+},
+"results/multiprompt/mp100/lc/rtnfp8_rep0/p85/85-0/segment_1.mp4::0": {
+"BC": 94.77,
+"SC": 88.83,
+"AQ": 56.75,
+"IQ": 64.66,
+"n": 113
+},
+"results/multiprompt/mp100/lc/kivifp8_rep0/p87/87-0/segment_1.mp4::0": {
+"BC": 95.07,
+"SC": 94.47,
+"AQ": 56.96,
+"IQ": 71.99,
+"n": 113
+},
+"results/multiprompt/mp100/lc/bf16_rep0/p88/88-0/segment_1.mp4::0": {
+"BC": 95.24,
+"SC": 94.56,
+"AQ": 56.31,
+"IQ": 76.55,
+"n": 113
+},
+"results/multiprompt/mp100/lc/pcakaxvaxfp8_rep0/p89/89-0/segment_1.mp4::0": {
+"BC": 93.52,
+"SC": 96.82,
+"AQ": 57.69,
+"IQ": 64.78,
+"n": 113
+},
+"results/multiprompt/mp100/lc/rtnfp8_rep0/p93/93-0/segment_1.mp4::0": {
+"BC": 96.21,
+"SC": 95.78,
+"AQ": 59.11,
+"IQ": 78.51,
+"n": 113
+},
+"results/multiprompt/mp100/lc/kivifp8_rep0/p95/95-0/segment_1.mp4::0": {
+"BC": 96.24,
+"SC": 92.8,
+"AQ": 50.37,
+"IQ": 77.19,
+"n": 113
+},
+"results/multiprompt/mp100/lc/bf16_rep0/p96/96-0/segment_1.mp4::0": {
+"BC": 93.94,
+"SC": 95.84,
+"AQ": 57.12,
+"IQ": 63.73,
+"n": 113
+},
+"results/multiprompt/mp100/lc/pcakaxvaxfp8_rep0/p97/97-0/segment_1.mp4::0": {
+"BC": 97.16,
+"SC": 95.96,
+"AQ": 61.33,
+"IQ": 71.98,
+"n": 113
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvaxfp8_rep0_f180/p2/0-0_ema.mp4::700": {
+"BC": 95.87,
+"SC": 93.43,
+"AQ": 56.47,
+"IQ": 72.73,
+"n": 700
+},
+"results/multiprompt/mp100/sf/kivifp8_rep0_f180/p5/0-0_ema.mp4::700": {
+"BC": 92.09,
+"SC": 80.61,
+"AQ": 51.71,
+"IQ": 69.96,
+"n": 700
+},
+"results/multiprompt/mp100/sf/rtnfp8_rep0_f180/p8/0-0_ema.mp4::700": {
+"BC": 83.89,
+"SC": 68.5,
+"AQ": 46.4,
+"IQ": 62.68,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvaxfp8_rep0_f180/p10/0-0_ema.mp4::700": {
+"BC": 89.31,
+"SC": 85.37,
+"AQ": 53.94,
+"IQ": 73.47,
+"n": 700
+},
+"results/multiprompt/mp100/sf/kivifp8_rep0_f180/p13/0-0_ema.mp4::700": {
+"BC": 94.41,
+"SC": 94.82,
+"AQ": 49.46,
+"IQ": 49.06,
+"n": 700
+},
+"results/multiprompt/mp100/sf/rtnfp8_rep0_f180/p16/0-0_ema.mp4::700": {
+"BC": 91.65,
+"SC": 84.59,
+"AQ": 44.47,
+"IQ": 56.02,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvaxfp8_rep0_f180/p18/0-0_ema.mp4::700": {
+"BC": 96.67,
+"SC": 96.11,
+"AQ": 53.44,
+"IQ": 78.25,
+"n": 700
+},
+"results/multiprompt/mp100/sf/kivifp8_rep0_f180/p21/0-0_ema.mp4::700": {
+"BC": 96.11,
+"SC": 96.27,
+"AQ": 56.9,
+"IQ": 77.05,
+"n": 700
+},
+"results/multiprompt/mp100/sf/rtnfp8_rep0_f180/p24/0-0_ema.mp4::700": {
+"BC": 84.9,
+"SC": 80.01,
+"AQ": 47.6,
+"IQ": 60.71,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvaxfp8_rep0_f180/p26/0-0_ema.mp4::700": {
+"BC": 95.71,
+"SC": 96.31,
+"AQ": 46.95,
+"IQ": 55.53,
+"n": 700
+},
+"results/multiprompt/mp100/sf/kivifp8_rep0_f180/p29/0-0_ema.mp4::700": {
+"BC": 87.08,
+"SC": 85.84,
+"AQ": 48.19,
+"IQ": 56.81,
+"n": 700
+},
+"results/multiprompt/mp100/sf/rtnfp8_rep0_f180/p32/0-0_ema.mp4::700": {
+"BC": 86.6,
+"SC": 71.71,
+"AQ": 46.5,
+"IQ": 64.35,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvaxfp8_rep0_f180/p34/0-0_ema.mp4::700": {
+"BC": 94.74,
+"SC": 92.77,
+"AQ": 51.71,
+"IQ": 78.5,
+"n": 700
+},
+"results/multiprompt/mp100/sf/kivifp8_rep0_f180/p37/0-0_ema.mp4::700": {
+"BC": 90.73,
+"SC": 95.05,
+"AQ": 49.93,
+"IQ": 72.07,
+"n": 700
+},
+"results/multiprompt/mp100/sf/rtnfp8_rep0_f180/p40/0-0_ema.mp4::700": {
+"BC": 94.53,
+"SC": 84.56,
+"AQ": 52.97,
+"IQ": 48.73,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvaxfp8_rep0_f180/p42/0-0_ema.mp4::700": {
+"BC": 91.9,
+"SC": 85.38,
+"AQ": 57.87,
+"IQ": 43.55,
+"n": 700
+},
+"results/multiprompt/mp100/sf/kivifp8_rep0_f180/p45/0-0_ema.mp4::700": {
+"BC": 96.76,
+"SC": 94.11,
+"AQ": 57.04,
+"IQ": 72.81,
+"n": 700
+},
+"results/multiprompt/mp100/sf/rtnfp8_rep0_f180/p48/0-0_ema.mp4::700": {
+"BC": 86.61,
+"SC": 74.44,
+"AQ": 46.62,
+"IQ": 69.66,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvaxfp8_rep0_f180/p50/0-0_ema.mp4::700": {
+"BC": 88.83,
+"SC": 75.71,
+"AQ": 50.63,
+"IQ": 57.84,
+"n": 700
+},
+"results/multiprompt/mp100/sf/kivifp8_rep0_f180/p53/0-0_ema.mp4::700": {
+"BC": 95.16,
+"SC": 96.52,
+"AQ": 58.92,
+"IQ": 77.96,
+"n": 700
+},
+"results/multiprompt/mp100/sf/rtnfp8_rep0_f180/p56/0-0_ema.mp4::700": {
+"BC": 87.78,
+"SC": 79.96,
+"AQ": 53.4,
+"IQ": 62.56,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvaxfp8_rep0_f180/p58/0-0_ema.mp4::700": {
+"BC": 95.94,
+"SC": 89.56,
+"AQ": 57.61,
+"IQ": 73.22,
+"n": 700
+},
+"results/multiprompt/mp100/sf/kivifp8_rep0_f180/p61/0-0_ema.mp4::700": {
+"BC": 89.54,
+"SC": 80.74,
+"AQ": 55.25,
+"IQ": 67.88,
+"n": 700
+},
+"results/multiprompt/mp100/sf/rtnfp8_rep0_f180/p64/0-0_ema.mp4::700": {
+"BC": 83.74,
+"SC": 58.04,
+"AQ": 44.89,
+"IQ": 52.87,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvaxfp8_rep0_f180/p66/0-0_ema.mp4::700": {
+"BC": 87.35,
+"SC": 76.49,
+"AQ": 45.02,
+"IQ": 57.63,
+"n": 700
+},
+"results/multiprompt/mp100/sf/kivifp8_rep0_f180/p69/0-0_ema.mp4::700": {
+"BC": 98.15,
+"SC": 97.72,
+"AQ": 59.94,
+"IQ": 71.73,
+"n": 700
+},
+"results/multiprompt/mp100/sf/rtnfp8_rep0_f180/p72/0-0_ema.mp4::700": {
+"BC": 96.4,
+"SC": 94.41,
+"AQ": 53.77,
+"IQ": 46.31,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvaxfp8_rep0_f180/p74/0-0_ema.mp4::700": {
+"BC": 97.86,
+"SC": 93.69,
+"AQ": 63.17,
+"IQ": 72.32,
+"n": 700
+},
+"results/multiprompt/mp100/sf/kivifp8_rep0_f180/p77/0-0_ema.mp4::700": {
+"BC": 94.71,
+"SC": 93.56,
+"AQ": 52.44,
+"IQ": 74.38,
+"n": 700
+},
+"results/multiprompt/mp100/sf/rtnfp8_rep0_f180/p80/0-0_ema.mp4::700": {
+"BC": 92.39,
+"SC": 81.24,
+"AQ": 53.09,
+"IQ": 69.29,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvaxfp8_rep0_f180/p82/0-0_ema.mp4::700": {
+"BC": 98.56,
+"SC": 97.56,
+"AQ": 52.52,
+"IQ": 70.05,
+"n": 700
+},
+"results/multiprompt/mp100/sf/kivifp8_rep0_f180/p85/0-0_ema.mp4::700": {
+"BC": 88.55,
+"SC": 78.47,
+"AQ": 45.69,
+"IQ": 58.48,
+"n": 700
+},
+"results/multiprompt/mp100/sf/rtnfp8_rep0_f180/p88/0-0_ema.mp4::700": {
+"BC": 95.48,
+"SC": 91.49,
+"AQ": 49.22,
+"IQ": 51.41,
+"n": 700
+},
+"results/multiprompt/mp100/sf/pcaa128kaxvaxfp8_rep0_f180/p90/0-0_ema.mp4::700": {
+"BC": 97.92,
+"SC": 96.7,
+"AQ": 57.4,
+"IQ": 68.5,
+"n": 700
+},
+"results/multiprompt/mp100/sf/kivifp8_rep0_f180/p93/0-0_ema.mp4::700": {
+"BC": 93.6,
+"SC": 92.72,
+"AQ": 56.67,
+"IQ": 74.34,
+"n": 700
+},
+"results/multiprompt/mp100/sf/rtnfp8_rep0_f180/p96/0-0_ema.mp4::700": {
+"BC": 85.44,
+"SC": 76.31,
+"AQ": 47.19,
+"IQ": 54.95,
+"n": 700
 }
 }

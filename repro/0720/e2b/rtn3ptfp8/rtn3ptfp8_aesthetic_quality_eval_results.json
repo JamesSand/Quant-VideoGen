@@ -1,0 +1,27 @@
+{
+    "aesthetic_quality": [
+        0.62196204662323,
+        [
+            {
+                "video_path": "/tmp/claude-1001/-home-zhizhousha-workspace-video-project/4fb6e620-a325-4b3c-8f86-3fcd80917455/scratchpad/e2b_vids/rtn3ptfp8/p1.mp4",
+                "video_results": 0.6347026824951172
+            },
+            {
+                "video_path": "/tmp/claude-1001/-home-zhizhousha-workspace-video-project/4fb6e620-a325-4b3c-8f86-3fcd80917455/scratchpad/e2b_vids/rtn3ptfp8/p3.mp4",
+                "video_results": 0.5609233379364014
+            },
+            {
+                "video_path": "/tmp/claude-1001/-home-zhizhousha-workspace-video-project/4fb6e620-a325-4b3c-8f86-3fcd80917455/scratchpad/e2b_vids/rtn3ptfp8/p2.mp4",
+                "video_results": 0.5952845811843872
+            },
+            {
+                "video_path": "/tmp/claude-1001/-home-zhizhousha-workspace-video-project/4fb6e620-a325-4b3c-8f86-3fcd80917455/scratchpad/e2b_vids/rtn3ptfp8/p4.mp4",
+                "video_results": 0.6831974387168884
+            },
+            {
+                "video_path": "/tmp/claude-1001/-home-zhizhousha-workspace-video-project/4fb6e620-a325-4b3c-8f86-3fcd80917455/scratchpad/e2b_vids/rtn3ptfp8/p5.mp4",
+                "video_results": 0.6357021927833557
+            }
+        ]
+    ]
+}

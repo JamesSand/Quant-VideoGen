@@ -1,0 +1,27 @@
+{
+    "aesthetic_quality": [
+        0.6029199004173279,
+        [
+            {
+                "video_path": "/tmp/claude-1001/-home-zhizhousha-workspace-video-project/4fb6e620-a325-4b3c-8f86-3fcd80917455/scratchpad/e2b_vids/kivipaperfp8/p1.mp4",
+                "video_results": 0.6122471690177917
+            },
+            {
+                "video_path": "/tmp/claude-1001/-home-zhizhousha-workspace-video-project/4fb6e620-a325-4b3c-8f86-3fcd80917455/scratchpad/e2b_vids/kivipaperfp8/p3.mp4",
+                "video_results": 0.5403568148612976
+            },
+            {
+                "video_path": "/tmp/claude-1001/-home-zhizhousha-workspace-video-project/4fb6e620-a325-4b3c-8f86-3fcd80917455/scratchpad/e2b_vids/kivipaperfp8/p2.mp4",
+                "video_results": 0.5723458528518677
+            },
+            {
+                "video_path": "/tmp/claude-1001/-home-zhizhousha-workspace-video-project/4fb6e620-a325-4b3c-8f86-3fcd80917455/scratchpad/e2b_vids/kivipaperfp8/p4.mp4",
+                "video_results": 0.673751950263977
+            },
+            {
+                "video_path": "/tmp/claude-1001/-home-zhizhousha-workspace-video-project/4fb6e620-a325-4b3c-8f86-3fcd80917455/scratchpad/e2b_vids/kivipaperfp8/p5.mp4",
+                "video_results": 0.6158977150917053
+            }
+        ]
+    ]
+}
