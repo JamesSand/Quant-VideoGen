@@ -120,6 +120,7 @@ case $KIND in
               --quant_block_size 64 --cache_num_k_centroids 256 --cache_num_v_centroids 256 \
               --kmeans_max_iters $IT --num_prq_stages 1 > $LOG 2>&1; RC=$? ;;
       rtn*|kivi*) case $ARM in
+              kivipost*) export PCA_KIVI_POST=1 PCA_ROPE_GRID=19,30,52 ;;
               kivipaper*) export PCA_KIVI_PAPER=1 PCA_ROPE_GRID=19,30,52 ;;
               rtn*) export PCA_RTN=1 ;;
               *) export PCA_KIVI=1 ;;

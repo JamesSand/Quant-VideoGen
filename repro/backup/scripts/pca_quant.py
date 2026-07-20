@@ -614,6 +614,20 @@ def _kivi_paper_fake_quant_kv(k, v):
     return kq.to(k.dtype), v_q.to(v.dtype)
 
 
+def _kivi_post_fake_quant_kv(k, v):
+    """归因分离臂(0720):满血 KIVI 格(K per-channel asym g128 / V per-token
+    asym g64)但施加在 POST-RoPE 坐标(R -> quant -> R^-1)。与诚实 KIVI 臂
+    (kivifp8)的唯一差异 = 量化位置,用于分离 pre/post-RoPE 对满血 KIVI 的价值。"""
+    B, H, S, D = k.shape
+    cos, sin = _lc_rope_cos_sin(S, D, k.device)
+    kf = k.float()
+    kr = kf * cos + _rot_half(kf) * sin                     # R(k)
+    ktq = _perchannel_quant(kr.transpose(-1, -2).contiguous(), "asym").transpose(-1, -2)
+    kq = ktq * cos - _rot_half(ktq) * sin                   # R^-1
+    v_q = _asym_quant_lastdim_grouped(v, 2, 64, mse_opt=False)
+    return kq.to(k.dtype), v_q.to(v.dtype)
+
+
 def _kivi_fake_quant_kv(k, v):
     """KIVI baseline (Liu et al. 2024) core mechanism: K quantized PER-CHANNEL
     (asym 2-bit, groups of 128 along the token axis), V PER-TOKEN (asym 2-bit,
@@ -640,6 +654,11 @@ def pca_fake_quant_kv(k, v):
         torch.save({"k": k.detach().to(torch.bfloat16).cpu(),
                     "v": v.detach().to(torch.bfloat16).cpu()},
                    f"{_DUMP_DIR}/chunk_{call_idx:03d}.pt")
+    if os.environ.get("PCA_KIVI_POST", "") == "1":
+        if not getattr(pca_fake_quant_kv, "_kpost_announced", False):
+            pca_fake_quant_kv._kpost_announced = True
+            print("[pca_quant] KIVI-POST mode: post-RoPE per-channel ASYM g128", flush=True)
+        return _kivi_post_fake_quant_kv(k, v)
     if os.environ.get("PCA_KIVI_PAPER", "") == "1":
         if not getattr(pca_fake_quant_kv, "_kp_announced", False):
             pca_fake_quant_kv._kp_announced = True

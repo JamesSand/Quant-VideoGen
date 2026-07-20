@@ -1,0 +1,10 @@
+lc:1:kivipostfp8:0
+lc:2:kivipostfp8:0
+lc:3:kivipostfp8:0
+lc:4:kivipostfp8:0
+lc:5:kivipostfp8:0
+lc:6:kivipostfp8:0
+lc:7:kivipostfp8:0
+lc:8:kivipostfp8:0
+lc:9:kivipostfp8:0
+lc:10:kivipostfp8:0
