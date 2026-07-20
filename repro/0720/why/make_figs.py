@@ -111,7 +111,8 @@ for ax, m in zip(axes, MODELS):
 fig.suptitle("H2 判决:QVG 误差集中在小方差通道;LC 判决性(1.8-2.4×,8/8)且跨层稳", y=1.03)
 fig.savefig(f"{OUT}/fig4_channel_error.png", bbox_inches="tight"); plt.close(fig)
 
-# Fig5 (H3, 修正口径): per-head 全 D 维 token 云 + 该 head 的 256 质心
+# Fig5 (H3): 双联图——同一片 token 云,kmeans 的可表示集(离散点) vs
+# PCA 的可表示集(连续子空间;本图平面 = top-2 主方向)
 sys.path.insert(0, ".")
 from quant_videogen.kmeans.kmeans_euclid import batch_kmeans_Euclid
 dd = torch.load("repro/0720/chunks/lc/chunk_001.pt", map_location="cuda")
@@ -119,19 +120,37 @@ k = dd["k"].float()
 B, H, S, D = k.shape
 Xh = k.reshape(B * H, S, D)[0]                       # head 0 的全部 token
 ids, cent, _, _ = batch_kmeans_Euclid(Xh.unsqueeze(0), 256, max_iters=100)
-cent = cent.squeeze(0)
+ids, cent = ids.squeeze(0).long(), cent.squeeze(0)
 mu = Xh.mean(0, keepdim=True)
 Xc = Xh - mu
 cov = (Xc.T @ Xc) / Xc.shape[0]
 _, V = torch.linalg.eigh(cov)
-P2 = V[:, -2:]
+P2 = V[:, [-1, -2]]                                  # 列序:x=第一主方向,y=第二主方向
 pts = ((Xh - mu) @ P2).cpu().numpy()
 cpts = ((cent - mu) @ P2).cpu().numpy()
-fig, ax = plt.subplots(figsize=(6.5, 5.5), dpi=150)
-ax.scatter(pts[:, 0], pts[:, 1], s=1, alpha=0.10, color="#4A7AB5", label=f"head-0 全部 token({S} 个,128 维)")
-ax.scatter(cpts[:, 0], cpts[:, 1], s=14, color="#B5484A", marker="x", label="该 head 的 k-means 256 质心")
-ax.set_xlabel("PC-1"); ax.set_ylabel("PC-2")
-ax.set_title("H3(真实口径):LC 单 head 的 token 云连续铺开\n256 离散质心撒点覆盖(维度诅咒),连续子空间一步到位")
-ax.legend(fontsize=8, markerscale=2)
+sel = torch.randperm(S)[:220].numpy()                # 抽样画"token→它的表示"位移线
+own = ((cent[ids[sel]] - mu) @ P2).cpu().numpy()     # kmeans 表示 = 最近质心
+fig, axes = plt.subplots(1, 2, figsize=(13, 5.5), dpi=150, sharex=True, sharey=True)
+for ax in axes:
+    ax.scatter(pts[:, 0], pts[:, 1], s=1, alpha=0.08, color="#4A7AB5")
+    ax.set_xlabel("PC-1")
+axL, axR = axes
+axL.scatter(cpts[:, 0], cpts[:, 1], s=14, color="#B5484A", marker="x", label="可表示集 = 256 个离散质心")
+for i, s_i in enumerate(sel):
+    axL.plot([pts[s_i, 0], own[i, 0]], [pts[s_i, 1], own[i, 1]], color="#B5484A", lw=0.5, alpha=0.35)
+axL.plot([], [], color="#B5484A", lw=0.8, alpha=0.6, label="token→最近质心(图内可见的表示误差)")
+axL.set_ylabel("PC-2"); axL.set_title("k-means:撒点覆盖——云连续、点离散,间隙就是误差")
+axL.legend(fontsize=8, markerscale=2, loc="lower right")
+axR.axhspan(*axR.get_ylim(), color="#4A7AB5", alpha=0.06, zorder=0)
+for vec, name in ((P2[:, 0], "v1"), (P2[:, 1], "v2")):
+    d2 = (P2.T @ vec).cpu().numpy() * 6.0
+    axR.annotate("", xy=(d2[0], d2[1]), xytext=(0, 0),
+                 arrowprops=dict(arrowstyle="->", color="#2E5E8C", lw=2))
+    axR.text(d2[0] * 1.08, d2[1] * 1.08, name, color="#2E5E8C", fontsize=11)
+axR.scatter(pts[sel, 0], pts[sel, 1], s=8, color="#3E8E5A", alpha=0.9,
+            label="PCA 表示(主方向分量精确保留,零位移)")
+axR.set_title("Budget-PCA:可表示集 = 连续子空间(整个平面)\n主方向零误差;真正的误差在图外 124 个次方向 → 交给残差格")
+axR.legend(fontsize=8, markerscale=2, loc="lower right")
+fig.suptitle("H3(LC head-0,29640 个 128 维 token):离散字典撒不满连续云,连续子空间一步盖住", y=1.02)
 fig.savefig(f"{OUT}/fig5_pc_plane.png", bbox_inches="tight"); plt.close(fig)
 print("figs 1-5 saved")
