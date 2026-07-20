@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""H1 判决曲线的 kmeans 侧:质心减法单独消掉的能量(与 rank 曲线同口径)。
-用 QVG 原装 batch_kmeans_Euclid,64 维块,K=16..1024,iters=100 收敛口径。
-输出并入 repro/0720/why/h1_h2_data.npz 的 {model}_kmeans_sub_pts。
+"""【已废弃,仅留痕】H1 kmeans 侧旧版:全局 64 维块聚类——口径错误。
+QVG 真实实现是 per-head、全 D 维 token 聚类(prq_quantize_tensor,
+centroids (B,H,K,D));block_size=64 只作用于残差量化。
+正确版见 h1_real_path.py(0720 二审勘误)。
 """
 import os, sys
 import numpy as np
