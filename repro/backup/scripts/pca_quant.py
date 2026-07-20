@@ -554,19 +554,77 @@ def _subchunk_apply(x, fn, n):
     return torch.cat([fn(x[:, :, cuts[i]:cuts[i + 1]]) for i in range(n)], dim=2)
 
 
+_ROPE_TAB = {}
+
+
+def _lc_rope_cos_sin(S, D, device):
+    """LC rope_3d frequency table (window-relative grid from PCA_ROPE_GRID)."""
+    key = (S, D)
+    if key in _ROPE_TAB:
+        cos, sin = _ROPE_TAB[key]
+        return cos.to(device), sin.to(device)
+    T, Hh, W = (int(x) for x in os.environ.get("PCA_ROPE_GRID", "19,30,52").split(","))
+    assert T * Hh * W == S, f"rope grid {T}x{Hh}x{W} != S={S}"
+    dim_t = D - 4 * (D // 6)
+    dim_h = 2 * (D // 6)
+    dim_w = 2 * (D // 6)
+    def fr(dim):
+        return 1.0 / (10000 ** (torch.arange(0, dim, 2)[: dim // 2].float() / dim))
+    ft = torch.einsum("t,f->tf", torch.arange(T).float(), fr(dim_t)).repeat_interleave(2, -1)
+    fh = torch.einsum("h,f->hf", torch.arange(Hh).float(), fr(dim_h)).repeat_interleave(2, -1)
+    fw = torch.einsum("w,f->wf", torch.arange(W).float(), fr(dim_w)).repeat_interleave(2, -1)
+    freqs = torch.cat([
+        ft[:, None, None, :].expand(T, Hh, W, -1),
+        fh[None, :, None, :].expand(T, Hh, W, -1),
+        fw[None, None, :, :].expand(T, Hh, W, -1)], dim=-1).reshape(S, D)
+    cos, sin = freqs.cos(), freqs.sin()
+    _ROPE_TAB[key] = (cos, sin)
+    return cos.to(device), sin.to(device)
+
+
+def _rot_half(x):
+    x2 = x.reshape(*x.shape[:-1], x.shape[-1] // 2, 2)
+    a, b = x2.unbind(-1)
+    return torch.stack((-b, a), dim=-1).reshape(x.shape)
+
+
+def _perchannel_quant(kt_in, grid, g=128):
+    """kt_in [B,H,D,S] -> per-channel blockwise quant along tokens (padded)."""
+    S_ = kt_in.shape[-1]
+    pad = (g - S_ % g) % g
+    kt = torch.nn.functional.pad(kt_in, (0, pad)) if pad else kt_in
+    if grid == "ternary":
+        q = _ternary_quant_blocked(kt, g, fp8_per_row=True)
+    else:
+        q = _asym_quant_lastdim_grouped(kt, 2, g, mse_opt=False, fp8_per_row=True)
+    return q[..., :S_] if pad else q
+
+
+def _kivi_paper_fake_quant_kv(k, v):
+    """Paper-style KIVI hypothesis: per-channel THREE-LEVEL SYMMETRIC grid
+    applied in POST-RoPE coordinates (R -> quant -> R^-1; the pipeline's
+    read-time rope re-applies R, so quantization acted post-RoPE)."""
+    B, H, S, D = k.shape
+    cos, sin = _lc_rope_cos_sin(S, D, k.device)
+    kf = k.float()
+    kr = kf * cos + _rot_half(kf) * sin                     # R(k)
+    ktq = _perchannel_quant(kr.transpose(-1, -2).contiguous(), "ternary").transpose(-1, -2)
+    kq = ktq * cos - _rot_half(ktq) * sin                   # R^-1
+    v_q = _ternary_quant_blocked(v.float(), 64)             # V per-token 3-level
+    return kq.to(k.dtype), v_q.to(v.dtype)
+
+
 def _kivi_fake_quant_kv(k, v):
     """KIVI baseline (Liu et al. 2024) core mechanism: K quantized PER-CHANNEL
     (asym 2-bit, groups of 128 along the token axis), V PER-TOKEN (asym 2-bit,
     groups of 64 along channels). The FP16 recent-window of KIVI corresponds to
     the pipelines' native BF16 recent window (aged-chunk quantization)."""
-    kt = k.transpose(-1, -2).contiguous()          # [B,H,D,S]
-    S = kt.shape[-1]
-    g = 128
-    pad = (g - S % g) % g
-    if pad:
-        kt = torch.nn.functional.pad(kt, (0, pad))
-    k_q = _asym_quant_lastdim_grouped(kt, 2, g, mse_opt=False, fp8_per_row=True)[..., :S].transpose(-1, -2).contiguous()
-    v_q = _asym_quant_lastdim_grouped(v, 2, 64, mse_opt=False)
+    grid = os.environ.get("PCA_KIVI_GRID", "asym")
+    k_q = _perchannel_quant(k.transpose(-1, -2).contiguous(), grid).transpose(-1, -2).contiguous()
+    if grid == "ternary":
+        v_q = _ternary_quant_blocked(v.float(), 64).to(v.dtype)
+    else:
+        v_q = _asym_quant_lastdim_grouped(v, 2, 64, mse_opt=False)
     return k_q.to(k.dtype), v_q.to(v.dtype)
 
 
@@ -582,17 +640,25 @@ def pca_fake_quant_kv(k, v):
         torch.save({"k": k.detach().to(torch.bfloat16).cpu(),
                     "v": v.detach().to(torch.bfloat16).cpu()},
                    f"{_DUMP_DIR}/chunk_{call_idx:03d}.pt")
+    if os.environ.get("PCA_KIVI_PAPER", "") == "1":
+        if not getattr(pca_fake_quant_kv, "_kp_announced", False):
+            pca_fake_quant_kv._kp_announced = True
+            print("[pca_quant] PAPER-KIVI hypothesis mode: post-RoPE per-channel ternary", flush=True)
+        return _kivi_paper_fake_quant_kv(k, v)
     if os.environ.get("PCA_KIVI", "") == "1":
         if not getattr(pca_fake_quant_kv, "_kivi_announced", False):
             pca_fake_quant_kv._kivi_announced = True
             print("[pca_quant] KIVI baseline mode: K per-channel g128 / V per-token g64", flush=True)
         return _kivi_fake_quant_kv(k, v)
     if os.environ.get("PCA_RTN", "") == "1":
-        # RTN baseline: plain per-token blockwise asym 2-bit (== fork's naive-int2
+        # RTN baseline: plain per-token blockwise 2-bit (== fork's naive-int2
         # math), routed through this launcher for the SF BSHD store fix.
         if not getattr(pca_fake_quant_kv, "_rtn_announced", False):
             pca_fake_quant_kv._rtn_announced = True
-            print("[pca_quant] RTN baseline mode: asym 2-bit B64 per-token", flush=True)
+            print(f"[pca_quant] RTN baseline mode: {os.environ.get('PCA_RTN_GRID','asym')} 2-bit B64 per-token", flush=True)
+        if os.environ.get("PCA_RTN_GRID", "asym") == "ternary":
+            return (_ternary_quant_blocked(k.float(), 64).to(k.dtype),
+                    _ternary_quant_blocked(v.float(), 64).to(v.dtype))
         return (_asym_quant_lastdim_grouped(k, 2, 64, mse_opt=False).to(k.dtype),
                 _asym_quant_lastdim_grouped(v, 2, 64, mse_opt=False).to(v.dtype))
     if PCA_EVENT_SCHED and PCA_N_LAYERS > 0:

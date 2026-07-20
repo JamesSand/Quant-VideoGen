@@ -114,7 +114,17 @@ case $KIND in
               experiments/LongCat/run_long_t2v.py $LCC --quant_type none > $LOG 2>&1; RC=$? ;;
       qvg)  PYTHONPATH=experiments/LongCat torchrun --nproc_per_node=1 --standalone \
               experiments/LongCat/run_long_t2v.py $LCC $QVG_LC > $LOG 2>&1; RC=$? ;;
-      rtn*|kivi*) case $ARM in rtn*) export PCA_RTN=1;; *) export PCA_KIVI=1;; esac
+      qvgi*) IT=${ARM#qvgi}
+            PYTHONPATH=experiments/LongCat torchrun --nproc_per_node=1 --standalone \
+              experiments/LongCat/run_long_t2v.py $LCC --quant_type triton-nstages-kmeans-int2 \
+              --quant_block_size 64 --cache_num_k_centroids 256 --cache_num_v_centroids 256 \
+              --kmeans_max_iters $IT --num_prq_stages 1 > $LOG 2>&1; RC=$? ;;
+      rtn*|kivi*) case $ARM in
+              kivipaper*) export PCA_KIVI_PAPER=1 PCA_ROPE_GRID=19,30,52 ;;
+              rtn*) export PCA_RTN=1 ;;
+              *) export PCA_KIVI=1 ;;
+            esac
+            case $ARM in *3pt*) export PCA_KIVI_GRID=ternary PCA_RTN_GRID=ternary;; esac
             case $ARM in *fp8*) export PCA_FP8SIM=1;; esac
             PCA_TARGET=experiments/LongCat/run_long_t2v.py PYTHONPATH=experiments/LongCat \
               torchrun --nproc_per_node=1 --standalone repro/backup/scripts/pca_launcher.py \
