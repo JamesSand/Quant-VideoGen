@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """H1 修正版之我方侧:同一批 chunk 上测 Budget-PCA 的减法消掉能量与最终 relL2²,
-与 h1_real_path.py 同协议(chunk 001/000/003/006),终版配置(K 张量侧)。
+与 h1_real_path.py 同协议(全部 8 chunk),终版配置(K 张量侧)。
 输出并入 h1_h2_data.npz 的 {model}_ourspath(列:chunk_id, removed, relL2sq_final)。
 """
 import os, sys
@@ -29,7 +29,7 @@ for model in ("lc", "sf", "hy"):
     import pca_quant
     importlib.reload(pca_quant)
     rows = []
-    for ci in (1, 0, 3, 6):
+    for ci in range(8):
         k = torch.load(f"repro/0720/chunks/{model}/chunk_{ci:03d}.pt", map_location="cuda")["k"].float()
         tot = float((k ** 2).sum())
         # 消掉的能量 = μ + top-r 低秩重建部分(与质心减法同角色)

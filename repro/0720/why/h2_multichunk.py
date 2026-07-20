@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""H2 跨 chunk 稳健性:小方差通道误差/信号比(QVG vs 我们),chunk 001/000/003/006。
+"""H2 跨 chunk 稳健性:小方差通道误差/信号比(QVG vs 我们),全部 8 chunk。
 勘误背景:原 H2 判决只用 chunk_001;本脚本验证 LC 核心比值的跨层稳定性,
 以及 SF/HY 次要论断是否跨 chunk 成立。
 QVG = 原装 prq(num_stages=1, K=256, eval iters)+ int2 B64;我们 = 终版配置。
@@ -49,7 +49,7 @@ for model in ("lc", "sf", "hy"):
     import pca_quant
     importlib.reload(pca_quant)
     rows = []
-    for ci in (1, 0, 3, 6):
+    for ci in range(8):
         k = torch.load(f"repro/0720/chunks/{model}/chunk_{ci:03d}.pt", map_location="cuda")["k"].float()
         rq = qvg_recon(k, ITERS[model])
         ro, _ = pca_quant.pca_fake_quant_kv(k.to(torch.bfloat16), k.to(torch.bfloat16))
