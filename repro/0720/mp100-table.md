@@ -1,3 +1,5 @@
+> 与 QVG paper Table 1 的数字差异盘点与排查:[paper-diff-plan.md](paper-diff-plan.md)
+
 # MP100 定案表(QVG Table-1 指标集,MovieGen 随机 100 prompts,seed=42)
 
 > 每列在量化方法间的最优加粗;BF16 为参考不参与排名。协议:LC f93、HY [13:] 均值、
