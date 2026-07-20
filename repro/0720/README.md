@@ -9,6 +9,6 @@
 
 ## 本日议题(与用户讨论定)
 
-- **已定:kernel 化 + 同输入速度对决**,kernel 化已完成,结果见 [kernel-results.md](kernel-results.md);**为什么赢的方法论分析** plan 见 [why-analysis-plan.md](why-analysis-plan.md)。其余候选:候选(承接 HANDOFF):剩余两列的 (a)收案/(b)解禁机制/(c)换口径;
+- **已定:kernel 化 + 同输入速度对决**,kernel 化已完成,结果见 [kernel-results.md](kernel-results.md);**为什么赢的判决报告**见 [why-budget-pca-wins.md](why-budget-pca-wins.md)(plan 已按约定删除,判据引用于报告内)。其余候选:候选(承接 HANDOFF):剩余两列的 (a)收案/(b)解禁机制/(c)换口径;
   kernel 化 M0-M4(通道轴的转置访存入设计);0717/0718 头条文档按 MP100 重写;
   QVG-Pro 臂;paper 写作。

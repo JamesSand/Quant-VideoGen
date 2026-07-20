@@ -1,5 +1,11 @@
 # Budget-PCA(通道轴版)方法讲解:三个模型各自怎么做,代码在哪
 
+> ⚠️ 0720 勘误:本文写作时的 LC/SF 战绩与 BPE 引用了记账修正前的数字。以
+> [mp100-table.md](mp100-table.md)(终表)与 [bpe-audit.md](bpe-audit.md)
+> (逐字节审计:LC 2.3192 / SF 2.3183 / HY cache 2.3250)为准;终版战绩:
+> LC 31.68/0.9370/0.0547、SF 四维 93.21/66.65/88.69/53.27、HY 18.77/0.5016/0.3286。
+> 方法机制、代码链接、env 配置部分仍然有效(kernel 实现另见 kernel/bp_quant.py)。
+
 > 0720 版,对应 [mp100-table.md](mp100-table.md) 的终版配置。引擎
 > [`pca_quant.py`](../backup/scripts/pca_quant.py),注入器
 > [`pca_launcher.py`](../backup/scripts/pca_launcher.py)。所有行号可点击跳转。
