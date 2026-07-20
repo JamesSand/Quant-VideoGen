@@ -116,6 +116,44 @@ KIVI ≈ 只修 H2(通道)不减方向;我们 = H2 + 减法都占。分解:
   分布反而伤量化"与我们"PCA 只做减法不改坐标系"互证);
 - 通道 outlier 与 pre-RoPE:[KVQuant](https://proceedings.neurips.cc/paper_files/paper/2024/file/028fcbcf85435d39a40c4d61b42c99a4-Paper-Conference.pdf)、KIVI。
 
+## 复现方法(指令级)
+
+前提:repo 根目录、`.venv`、`source repro/backup/scripts/env_fix.sh`、单卡即可。
+素材 = 三管线真实 dump chunk(`repro/0720/chunks/{lc,sf,hy}/chunk_*.pt`;若缺,
+用带 `dump` 后缀的 campaign 臂重新采集,见 REPRODUCE-0718 §2)。
+
+```bash
+# ① H1/H2 主数据(奇异谱、rank 减法曲线、逐通道误差三方对比 → h1_h2_data.npz)
+CUDA_VISIBLE_DEVICES=0 .venv/bin/python repro/0720/why/h1_h2_compute.py
+
+# ② H1 的 kmeans 侧(质心减法单独消掉的能量,QVG 原装 kmeans,iters=100)
+CUDA_VISIBLE_DEVICES=0 .venv/bin/python repro/0720/why/h1_kmeans_sub.py
+
+# ③ 图 1-5(谱 / H1 判决 / 残差格效率 / H2 逐通道 / H3 质心散点)
+CUDA_VISIBLE_DEVICES=0 .venv/bin/python repro/0720/why/make_figs.py
+
+# ④ 图 6(HY 半区分谱反转)
+CUDA_VISIBLE_DEVICES=0 .venv/bin/python repro/0720/why/fig6_hy_halves.py
+
+# ⑤ H4(kmeans iters 扫描,20 次 LC 生成,~1.5h/8 卡)
+#    生成:campaign 臂 qvgi2 / qvgi10(qvgi<N> 会把 --kmeans_max_iters 设为 N)
+printf 'lc:%d:qvgi2:0\nlc:%d:qvgi10:0\n' $(seq 1 10 | sed 'p') > /tmp/h4.txt  # 或手写 20 行
+CAMPAIGN_NS=mp100 CAMPAIGN_PROMPTS=repro/0718/prompts100/selected.txt \
+  bash repro/0718/scripts/gpu_queue.sh /tmp/h4.txt 8
+#    打分:对每个臂算 f93 PSNR vs 同 prompt BF16(帮助函数同 repro/0718/scripts/stats.py)
+```
+
+关键数字核对点(复现应落在 ±噪声内):
+- fig2:LC kmeans K=256 消掉 ~98.5% @0.127bits;rank-4 ~82.1% @0.25bits;
+- fig3 的效率比:最终误差能量/残差能量 = QVG 0.589 vs 我们 0.036(LC);
+  该比值的分子来自 kernel/bench_report.json 的 relL2²,分母 = 1 − 减法消掉比例;
+- fig4:LC 小方差后 16 通道误差比 QVG 0.148 / 我们 0.065;
+- fig6:prope top-9 = 81.8%、能量占 66.3%;
+- H4:iters 2/10/100 → 27.13 / 27.72 / 27.61(f93,p1-10)。
+
+逐通道误差三方对比里 KIVI/我们的臂 = `pca_quant.py` 的 PCA_KIVI=1 / 终版配置
+(kernel/bp_quant.py 同数学);kmeans 一律 QVG 原装(`quant_videogen/`)。
+
 ## 诚实条款执行记录
 
 - H1 原命题按预注册判据**证伪**并如实修正(判据 0720 实验前写死于 plan);
