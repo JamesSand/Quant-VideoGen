@@ -13,7 +13,7 @@
 | 终表(质量) | [mp100-table.md](mp100-table.md) | `repro/0718/scripts/{campaign,gpu_queue}.sh` → `repro/0720/score_fp8.py` → `aggregate_fp8.py` | LC 31.68/0.9370/0.0547;SF 四维全第一;HY 18.77 |
 | BPE 审计 | [bpe-audit.md](bpe-audit.md) | `repro/0720/kernel/bpe_audit.py` | LC 2.3192 / SF 2.3183 / HY cache 2.3250(全 ≤2.326) |
 | 速度对决 | [kernel-results.md](kernel-results.md) | `repro/0720/kernel/bench_speed.py` | encode LC 32.5× / HY 1.4× / SF 1.1× 快过 kmeans |
-| why 判决 | [why-budget-pca-wins.md](why-budget-pca-wins.md) | `repro/0720/why/*.py`(§7) | H1 证伪 24/24;格效率差 ~2.2×;H4 平坦 |
+| why 判决 | [why-budget-pca-wins.md](why-budget-pca-wins.md)(成立假说)+ [why-refuted-and-errata.md](why-refuted-and-errata.md)(负结果台账) | `repro/0720/why/*.py`(§7) | 格效率差 ~2.2×;H1 原命题证伪 24/24;H4 平坦 |
 | 方法讲解 | [method-explainer.md](method-explainer.md) | — | (读物,行号可点击) |
 | paper 差异盘点 | [paper-diff-plan.md](paper-diff-plan.md) | `repro/0720/{score_e1,vbench_official}.py` | 四类差异全部定位到 paper 侧 |
 
