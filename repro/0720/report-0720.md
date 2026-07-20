@@ -22,8 +22,8 @@ X_c = X - \mathbf{1}\mu^\top
 ```math
 C = \tfrac{1}{S} X_c^\top X_c,
 \qquad
-V_r = \operatorname{top-r\ eigvecs}(C)
-\qquad\text{(只用本 chunk 数据,一次特征分解)}
+V_r = [\,v_1,\dots,v_r\,],\quad C v_i = \lambda_i v_i,\ \ \lambda_1 \ge \dots \ge \lambda_D
+\qquad\text{(只用本 chunk 数据,一次特征分解,取前 r 大特征向量)}
 ```
 
 ```math
