@@ -614,6 +614,31 @@ def _kivi_paper_fake_quant_kv(k, v):
     return kq.to(k.dtype), v_q.to(v.dtype)
 
 
+def _qvgpro_fake_quant_kv(k, v):
+    """QVG-Pro 反事实臂(0721 夜,reviewer-proof):QVG kmeans 减法 + BF16 质心
+    + 四电平 asym B128 残差格——按名义口径合法的最强 kmeans 变体。
+    合法性:LC 仅 token 轴合法(2.3257;channel 轴因 S 补零 2.3295 超线);
+    SF 两轴均合法(token 2.297 / channel 2.300);HY 2.738 超线(不跑)。
+    PCA_QVGPRO_AXIS=token|channel;PCA_QVGPRO_ITERS(LC 100 / SF 2)。"""
+    from quant_videogen.kmeans.kmeans_euclid import batch_kmeans_Euclid
+    iters = int(os.environ.get("PCA_QVGPRO_ITERS", "100"))
+    axis = os.environ.get("PCA_QVGPRO_AXIS", "token")
+    outs = []
+    for x in (k, v):
+        B, H, S, D = x.shape
+        X = x.float().view(B * H, S, D).contiguous()
+        lab, cent, _, _ = batch_kmeans_Euclid(X, n_clusters=256, max_iters=iters)
+        cent = cent.to(torch.bfloat16).float()          # 质心实存 BF16(名义口径)
+        g = torch.gather(cent, 1, lab.long().unsqueeze(-1).expand(-1, -1, D))
+        res = (X - g).view(B, H, S, D)
+        if axis == "channel":
+            rq = _perchannel_quant(res.transpose(-1, -2).contiguous(), "asym", g=128).transpose(-1, -2)
+        else:
+            rq = _asym_quant_lastdim_grouped(res, 2, 128, mse_opt=False, fp8_per_row=True)
+        outs.append((g.view(B, H, S, D) + rq).to(x.dtype))
+    return outs[0], outs[1]
+
+
 def _qvg4_fake_quant_kv(k, v):
     """反事实臂(0721):QVG 原装 kmeans 减法(per-head 全 D 维,K=256,LC 官配
     iters=100)不动,残差格由其三电平对称换成【四电平非对称 B64 + fp8 s/z】
@@ -673,6 +698,11 @@ def pca_fake_quant_kv(k, v):
         torch.save({"k": k.detach().to(torch.bfloat16).cpu(),
                     "v": v.detach().to(torch.bfloat16).cpu()},
                    f"{_DUMP_DIR}/chunk_{call_idx:03d}.pt")
+    if os.environ.get("PCA_QVGPRO", "") == "1":
+        if not getattr(pca_fake_quant_kv, "_qvgpro_announced", False):
+            pca_fake_quant_kv._qvgpro_announced = True
+            print(f"[pca_quant] QVG-Pro: kmeans+BF16 centroids + asym B128 axis={os.environ.get('PCA_QVGPRO_AXIS','token')}", flush=True)
+        return _qvgpro_fake_quant_kv(k, v)
     if os.environ.get("PCA_QVG4", "") == "1":
         if not getattr(pca_fake_quant_kv, "_qvg4_announced", False):
             pca_fake_quant_kv._qvg4_announced = True
