@@ -12,6 +12,18 @@ spec:
   hostNetwork: true
   nodeSelector:
     node-group: default
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: NotIn
+                values:
+                  - research-common-h100-048.cloud.together.ai
+                  - research-common-h100-057.cloud.together.ai
+                  - research-common-h100-066.cloud.together.ai
+                  - research-common-h100-081.cloud.together.ai
   runtimeClassName: nvidia
   containers:
     - name: worker
