@@ -614,6 +614,25 @@ def _kivi_paper_fake_quant_kv(k, v):
     return kq.to(k.dtype), v_q.to(v.dtype)
 
 
+def _qvg4_fake_quant_kv(k, v):
+    """反事实臂(0721):QVG 原装 kmeans 减法(per-head 全 D 维,K=256,LC 官配
+    iters=100)不动,残差格由其三电平对称换成【四电平非对称 B64 + fp8 s/z】
+    ——回答"QVG 若把 2-bit 的四个码字用满会怎样"。BPE 代价:残差 s/z 从
+    0.125 涨到 0.25(B64 asym 双参数),质心/索引账不变。"""
+    from quant_videogen.kmeans.kmeans_euclid import batch_kmeans_Euclid
+    iters = int(os.environ.get("PCA_QVG4_ITERS", "100"))
+    outs = []
+    for x in (k, v):
+        B, H, S, D = x.shape
+        X = x.float().view(B * H, S, D).contiguous()
+        lab, cent, _, _ = batch_kmeans_Euclid(X, n_clusters=256, max_iters=iters)
+        g = torch.gather(cent, 1, lab.long().unsqueeze(-1).expand(-1, -1, D))
+        res = (X - g).view(B, H, S, D)
+        rq = _asym_quant_lastdim_grouped(res, 2, 64, mse_opt=False, fp8_per_row=True)
+        outs.append((g.view(B, H, S, D) + rq).to(x.dtype))
+    return outs[0], outs[1]
+
+
 def _kivi_post_fake_quant_kv(k, v):
     """归因分离臂(0720):满血 KIVI 格(K per-channel asym g128 / V per-token
     asym g64)但施加在 POST-RoPE 坐标(R -> quant -> R^-1)。与诚实 KIVI 臂
@@ -654,6 +673,11 @@ def pca_fake_quant_kv(k, v):
         torch.save({"k": k.detach().to(torch.bfloat16).cpu(),
                     "v": v.detach().to(torch.bfloat16).cpu()},
                    f"{_DUMP_DIR}/chunk_{call_idx:03d}.pt")
+    if os.environ.get("PCA_QVG4", "") == "1":
+        if not getattr(pca_fake_quant_kv, "_qvg4_announced", False):
+            pca_fake_quant_kv._qvg4_announced = True
+            print("[pca_quant] QVG-4pt counterfactual: kmeans sub + ASYM 4-level B64 residual", flush=True)
+        return _qvg4_fake_quant_kv(k, v)
     if os.environ.get("PCA_KIVI_POST", "") == "1":
         if not getattr(pca_fake_quant_kv, "_kpost_announced", False):
             pca_fake_quant_kv._kpost_announced = True
