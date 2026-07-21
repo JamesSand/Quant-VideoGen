@@ -6,7 +6,7 @@
 [../0720/REPRODUCE-0720.md](../0720/REPRODUCE-0720.md)。
 
 本日基线:[report-0721.md](report-0721.md)(= 0720 present 版 report 的副本,
-链接指回 0720 资产)。
+链接指回 0720 资产);**英文简明版:[report-0721-en.md](report-0721-en.md)**。
 
 本日产出:四审归因修正(grid_cross 交叉矩阵 + pcatern/qvg4pt/kivipost 三个
 反事实臂,详见 0720 各文档的 0721 增补);**[sell-budget-pca.md](sell-budget-pca.md)**
