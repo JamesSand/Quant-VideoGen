@@ -1,7 +1,7 @@
 # Budget-PCA 的卖点:面对 "qvg4pt 反超" 怎么讲
 
 > 背景:反事实臂 qvg4pt(QVG 的 kmeans 减法 + 四电平 asym B64 残差格)在 LC
-> 10 prompts 上打出 32.85dB,超过我们的 31.7。本文回答:**这不损害卖点,
+> 10 prompts 上打出 32.85(⚠0721 勘误中:此数系 qvg4pt 臂漏设 fp8 元数据模拟的口径,scale/zp 实为 fp32、真实 BPE ~2.84;fp8 合法口径复测进行中,完成后更新)dB,超过我们的 31.7。本文回答:**这不损害卖点,
 > 卖点恰恰藏在它的账单里。** 数据源:[../0720/report-0720.md](../0720/report-0720.md)
 > §4.1、[../0720/why/grid_cross.py](../0720/why/grid_cross.py)、
 > [../0720/bpe-audit.md](../0720/bpe-audit.md)。
