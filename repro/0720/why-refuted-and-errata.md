@@ -134,7 +134,7 @@ as-released 的真实表现),变的是"为什么差"的解释。
 
 ## 七、五审:"合同内无合法 kmeans 变体"论断部分撤回(0721 夜,用户驱动实测)
 
-用户坚持实跑名义口径的最强 kmeans 变体(qvgprot:BF16 质心 + 四电平 asym
+用户坚持实跑名义口径的最强单段 kmeans 变体(qvg-nom,臂名 qvgprot——注意与 paper 官方 QVG-Pro(4 段渐进,BPE≈3.22)不是一个方法:BF16 质心 + 四电平 asym
 token 轴 B128,名义 BPE 2.3257 压线合法;fp8 元数据 + 全局归一因子,与我们
 同规记账)。**结果:LC 10 prompts f93 = 32.80dB,超我们(31.7)1.1dB。**
 此前"按实存记账 kmeans 无合同内成员、合法预算点 Pareto 前沿无条件是我们"
