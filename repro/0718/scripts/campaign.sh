@@ -119,11 +119,11 @@ case $KIND in
               experiments/LongCat/run_long_t2v.py $LCC --quant_type triton-nstages-kmeans-int2 \
               --quant_block_size 64 --cache_num_k_centroids 256 --cache_num_v_centroids 256 \
               --kmeans_max_iters $IT --num_prq_stages 1 > $LOG 2>&1; RC=$? ;;
-      qvg4*) export PCA_QVG4=1
+      qvg4*) export PCA_QVG4=1 PCA_FP8SIM=1
             PCA_TARGET=experiments/LongCat/run_long_t2v.py PYTHONPATH=experiments/LongCat \
               torchrun --nproc_per_node=1 --standalone repro/backup/scripts/pca_launcher.py \
               $LCC --quant_type naive-int2 --quant_block_size 64 > $LOG 2>&1; RC=$? ;;
-      qvgpro*) export PCA_QVGPRO=1 PCA_QVGPRO_ITERS=100
+      qvgpro*) export PCA_QVGPRO=1 PCA_QVGPRO_ITERS=100 PCA_FP8SIM=1
             case $ARM in *proc*) export PCA_QVGPRO_AXIS=channel;; *) export PCA_QVGPRO_AXIS=token;; esac
             PCA_TARGET=experiments/LongCat/run_long_t2v.py PYTHONPATH=experiments/LongCat \
               torchrun --nproc_per_node=1 --standalone repro/backup/scripts/pca_launcher.py \
@@ -161,7 +161,7 @@ case $KIND in
               experiments/Self-Forcing/inference.py $SFC --quant_type none > $LOG 2>&1; RC=$? ;;
       qvg)  PYTHONPATH=experiments/Self-Forcing:. torchrun --nproc_per_node=1 --standalone \
               experiments/Self-Forcing/inference.py $SFC $QVG_SFHY > $LOG 2>&1; RC=$? ;;
-      qvgpro*) export PCA_QVGPRO=1 PCA_QVGPRO_ITERS=2 PCA_SF_STORE_FIX=1
+      qvgpro*) export PCA_QVGPRO=1 PCA_QVGPRO_ITERS=2 PCA_SF_STORE_FIX=1 PCA_FP8SIM=1
             case $ARM in *proc*) export PCA_QVGPRO_AXIS=channel;; *) export PCA_QVGPRO_AXIS=token;; esac
             PCA_TARGET=experiments/Self-Forcing/inference.py PYTHONPATH=experiments/Self-Forcing:. \
               torchrun --nproc_per_node=1 --standalone repro/backup/scripts/pca_launcher.py \

@@ -634,7 +634,9 @@ def _qvgpro_fake_quant_kv(k, v):
         if axis == "channel":
             rq = _perchannel_quant(res.transpose(-1, -2).contiguous(), "asym", g=128).transpose(-1, -2)
         else:
-            rq = _asym_quant_lastdim_grouped(res, 2, 128, mse_opt=False, fp8_per_row=True)
+            # token 轴:fp8 s/z + 全局归一因子(per_row=False;逐 token 因子须计
+            # 16/128=0.125,预算装不下——与我们 HY V 的 token 轴记账同规)
+            rq = _asym_quant_lastdim_grouped(res, 2, 128, mse_opt=False, fp8_per_row=False)
         outs.append((g.view(B, H, S, D) + rq).to(x.dtype))
     return outs[0], outs[1]
 

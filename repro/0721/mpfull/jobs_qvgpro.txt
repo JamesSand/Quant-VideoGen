@@ -208,3 +208,13 @@ sf:97:qvgproc:0
 sf:98:qvgproc:0
 sf:99:qvgproc:0
 sf:100:qvgproc:0
+lc:1:qvg4pt:0
+lc:2:qvg4pt:0
+lc:3:qvg4pt:0
+lc:4:qvg4pt:0
+lc:5:qvg4pt:0
+lc:6:qvg4pt:0
+lc:7:qvg4pt:0
+lc:8:qvg4pt:0
+lc:9:qvg4pt:0
+lc:10:qvg4pt:0
