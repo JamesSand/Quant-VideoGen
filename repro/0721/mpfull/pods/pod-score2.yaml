@@ -8,8 +8,6 @@ metadata:
     purpose: qvg-mpfull-worker
 spec:
   restartPolicy: Never
-  hostIPC: true
-  hostNetwork: true
   nodeSelector:
     node-group: default
   affinity:
@@ -18,8 +16,14 @@ spec:
         nodeSelectorTerms:
           - matchExpressions:
               - key: kubernetes.io/hostname
-                operator: In
-                values: ["research-common-h100-106.cloud.together.ai"]
+                operator: NotIn
+                values:
+                  - research-common-h100-036.cloud.together.ai
+                  - research-common-h100-048.cloud.together.ai
+                  - research-common-h100-053.cloud.together.ai
+                  - research-common-h100-057.cloud.together.ai
+                  - research-common-h100-066.cloud.together.ai
+                  - research-common-h100-081.cloud.together.ai
   runtimeClassName: nvidia
   containers:
     - name: worker
@@ -30,6 +34,7 @@ spec:
           if ! id zhizhousha &>/dev/null; then
             useradd -u 1001 -g 0 -d /home/zhizhousha -s /bin/bash -M zhizhousha
           fi
+          python3 -c "import ctypes,sys; sys.exit(0 if ctypes.CDLL('libcuda.so.1').cuInit(0)==0 else 1)" || { echo "CUINIT FAILED - BAD GPU, EXITING"; exit 1; }
           runuser -u zhizhousha -- env HOME=/home/zhizhousha bash -c '
             cd /home/zhizhousha/workspace/video-project/Quant-VideoGen
             for g in 0 1 2 3 4 5 6 7; do
@@ -44,10 +49,8 @@ spec:
         - name: HOME
           value: /home/zhizhousha
       resources:
-        requests: {cpu: "64", memory: 500Gi, nvidia.com/gpu: "8"}
-        limits: {cpu: "64", memory: 500Gi, nvidia.com/gpu: "8"}
-      securityContext:
-        privileged: true
+        requests: {cpu: "32", memory: 240Gi, nvidia.com/gpu: "8"}
+        limits: {cpu: "48", memory: 320Gi, nvidia.com/gpu: "8"}
       volumeMounts:
         - name: home
           mountPath: /home/zhizhousha
