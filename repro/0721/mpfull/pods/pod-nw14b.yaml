@@ -34,8 +34,8 @@ spec:
           if ! id zhizhousha &>/dev/null; then
             useradd -u 1001 -g 0 -d /home/zhizhousha -s /bin/bash -M zhizhousha
           fi
+          python3 -c "import ctypes,sys; sys.exit(0 if ctypes.CDLL('libcuda.so.1').cuInit(0)==0 else 1)" || { echo "CUINIT FAILED - BAD GPU, EXITING"; exit 1; }
           runuser -u zhizhousha -- env HOME=/home/zhizhousha bash -c '
-            python3 -c "import ctypes,sys; sys.exit(0 if ctypes.CDLL('libcuda.so.1').cuInit(0)==0 else 1)" || { echo CUINIT-FAILED-BAD-GPU; exit 1; }
             cd /home/zhizhousha/workspace/video-project/Quant-VideoGen
             export CAMPAIGN_NS=mpfull CAMPAIGN_PROMPTS=repro/0721/promptsfull/selected.txt CAMPAIGN_SF_DIR=repro/0721/promptsfull
             bash repro/0718/scripts/gpu_queue.sh repro/0721/mpfull/jobs_nw14.txt 8
