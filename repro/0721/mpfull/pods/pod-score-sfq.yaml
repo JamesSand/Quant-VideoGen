@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: zhizhousha-qvg-score-sfq
+  namespace: zhizhousha
+  labels:
+    owner: zhizhousha
+    purpose: qvg-mpfull-worker
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    node-group: default
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: NotIn
+                values:
+                  - research-common-h100-036.cloud.together.ai
+                  - research-common-h100-048.cloud.together.ai
+                  - research-common-h100-053.cloud.together.ai
+                  - research-common-h100-057.cloud.together.ai
+                  - research-common-h100-066.cloud.together.ai
+                  - research-common-h100-081.cloud.together.ai
+  runtimeClassName: nvidia
+  containers:
+    - name: worker
+      image: nvcr.io/nvidia/pytorch:25.11-py3
+      command: ["/bin/bash", "-c"]
+      args:
+        - |
+          if ! id zhizhousha &>/dev/null; then
+            useradd -u 1001 -g 0 -d /home/zhizhousha -s /bin/bash -M zhizhousha
+          fi
+          python3 -c "import ctypes,sys; sys.exit(0 if ctypes.CDLL('libcuda.so.1').cuInit(0)==0 else 1)" || { echo "CUINIT FAILED - BAD GPU, EXITING"; exit 1; }
+          runuser -u zhizhousha -- env HOME=/home/zhizhousha bash -c '
+            cd /home/zhizhousha/workspace/video-project/Quant-VideoGen
+            w=0
+            while [ $(find results/multiprompt/mp100/sf/qvgproc_rep0_f180 -name "*.mp4" | wc -l) -lt 100 ]; do
+              sleep 60; w=$((w+60))
+              [ $w -ge 3600 ] && { echo "WAIT TIMEOUT, scoring what exists"; break; }
+            done
+            CUDA_VISIBLE_DEVICES=0 .venv/bin/python repro/0721/mpfull/score_sf_qvgpro.py 0 2 > repro/0718/logs/score_sfq0.log 2>&1 &
+            CUDA_VISIBLE_DEVICES=1 .venv/bin/python repro/0721/mpfull/score_sf_qvgpro.py 1 2 > repro/0718/logs/score_sfq1.log 2>&1 &
+            wait
+            .venv/bin/python repro/0721/mpfull/aggregate_sf_qvgpro.py
+          '
+          echo "SCORE SFQ DONE"
+      workingDir: /home/zhizhousha
+      env:
+        - name: HOME
+          value: /home/zhizhousha
+      resources:
+        requests: {cpu: "12", memory: 90Gi, nvidia.com/gpu: "2"}
+        limits: {cpu: "20", memory: 128Gi, nvidia.com/gpu: "2"}
+      volumeMounts:
+        - name: home
+          mountPath: /home/zhizhousha
+        - name: shared
+          mountPath: /shared
+  volumes:
+    - name: home
+      persistentVolumeClaim:
+        claimName: home-zhizhousha
+    - name: shared
+      persistentVolumeClaim:
+        claimName: shared-data
