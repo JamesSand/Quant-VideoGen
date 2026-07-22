@@ -238,10 +238,9 @@ it. Attribution at equal metadata budget (0.125 bits/elem): **levels +
 asymmetry ≈ +20pp (main factor), channel axis ≈ +6-10pp, residual structure ≈
 +4pp**. Both directions verified end-to-end: ① our method with the 3-level
 grid falls to 23.97 (below QVG); ② QVG with a 4-level asym B64 grid rises to
-**32.85 (⚠ being re-measured: this first run missed the fp8 metadata
-simulation, so its scales were fp32 and the real BPE was ~2.84; the corrected
-run is queued)** — but at BPE **2.589** (11% over budget) and 33× slower
-encode. Its dictionary is too expensive to afford a good grid within the
+**32.29** (final, with fp8 metadata properly simulated; the first run's 32.85
+had fp32 scales and is void) — but at BPE **2.589** (11% over budget) and 33×
+slower encode. Its dictionary is too expensive to afford a good grid within the
 budget; our cheap subtraction is exactly what pays for one.
 
 Supporting fact: the KV token cloud is low-rank ("pancake"), layer-dependent
