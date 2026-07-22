@@ -1,5 +1,4 @@
 sf:6:qvgprot:0
-sf:9:qvgprot:0
 sf:15:qvgprot:0
 sf:18:qvgprot:0
 sf:21:qvgprot:0
