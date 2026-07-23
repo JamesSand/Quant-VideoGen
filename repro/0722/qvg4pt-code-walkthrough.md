@@ -188,6 +188,40 @@ return (q * scale + mn).reshape(S)
 - `q ∈ {0,1,2,3}` **四个码字全用满**,min-max 非对称覆盖整个区间;
 - 每块存 (scale, zero-point=块 min) 两个 fp8 参数 → 16/64 = **0.25 bits/elem**。
 
+#### 5.2.1 int2 四点位的本质:affine 量化(存一个 min + 一个步长)
+
+**这就是教科书里的 affine(asymmetric)quantization**。每 64 个元素一块,
+实际存的就是两个数 + 每元素 2 bit:
+
+```math
+mn = \min(\text{block}),\qquad
+s = \frac{\max(\text{block}) - mn}{2^{2}-1} = \frac{mx - mn}{3}
+```
+
+```math
+q = \mathrm{clamp}\!\left(\mathrm{round}\!\left(\frac{x - mn}{s}\right),\,0,\,3\right)
+\qquad\Longrightarrow\qquad
+\hat{x} = q \cdot s + mn
+```
+
+- **存储 = (mn, s) 两个 fp8 + 码 q ∈ {0,1,2,3}**。格子的"位置"由 mn 钉死,
+  "疏密"由 s 钉死;四个重建点是 $`\{mn,\ mn{+}s,\ mn{+}2s,\ mx\}`$——两端
+  精确压在块的 min/max 上,中间均匀插两点。
+- **0 一般不是格点**(除非 $`-mn/s`$ 恰为整数),而且故意不钉:kmeans 残差
+  不稀疏,没有大量精确 0,为钉 0 浪费一个码字不划算;0 附近的值就近落格,
+  误差 ≤ s/2,与别处一视同仁。
+- **码字没有符号**:{0,1,2,3} 是无符号偏移编码,有 zero-point 之后码字符号
+  无意义(写成 {−1,0,1,2} 再平移 mn 完全等价,格点位置不变)。
+- **三电平对称格 = affine 的退化特例**:强制 $`mn = -mx`$(对称),于是只需
+  存一个 scale(元数据省一半),换来 0 恒为精确格点——但 2-bit 四个码字只
+  用三个(QVG 代码 `get_intx_max_value(2)=1` 把 clamp 设 ±1,−2 从未用过),
+  且步长 = absmax 被 outlier 撑粗。数值对比(块范围 [−0.9, 0.6],值 0.5):
+  三电平格点 {−0.9, 0, 0.9},round 到 0.9,误差 0.4;四电平格点
+  {−0.9, −0.4, 0.1, 0.6},round 到 0.6,误差 0.1。grid_cross 里 47%→67%
+  的回收率跳变即由此而来。
+- 最小可跑版本(单文件内联 affine 实现 + LongCat 出一帧)见
+  [qvg4pt-demo/minimal_one_frame.py](qvg4pt-demo/minimal_one_frame.py)。
+
 ### 5.3 fp8 元数据模拟(`PCA_FP8SIM=1`)
 
 `pca_quant.py:70-79` 的 `_fp8`:scale 和 mn 各自除以归一因子后过
