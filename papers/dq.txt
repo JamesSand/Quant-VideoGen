@@ -1,0 +1,820 @@
+                         This CVPR paper is the Open Access version, provided by the Computer Vision Foundation.
+                                      Except for this watermark, it is identical to the accepted version;
+                                the final published version of the proceedings is available on IEEE Xplore.
+
+
+
+
+DeltaQuant: 4-Bit Video Diffusion Models with Spatiotemporal Delta Smoothing
+
+         Xingyang Li1 * Samuel Tesfai1 * Zhekai Zhang2 Haocheng Xi4 Shuo Yang4
+    Lvmin Zhang5 Yufei Sun1 Kelly Peng6 Maneesh Agrawala5 Ion Stoica4 Kurt Keutzer4
+                   Jun-Yan Zhu7 Song Han1,3 Yujun Lin2 Muyang Li2
+    1             2                              3                      4                             5                     6                                    7
+        MIT           Nunchaku AI                    NVIDIA                 UC Berkeley                   Stanford              First Intelligence                   CMU
+
+   Prompt: The camera follows a white vintage SUV with a black roof rack speeding up a steep dirt road surrounded by redwoods on a mountain slope. Dust kicks up as the sunlight
+                                                         creates a warm glow, emphasizing the rugged, serene landscape.
+
+
+
+
+                          Wan2.2 I2V LightX2V + Radial & Sage Attention Vision Reward: 0.145 Latency: 131s                  Memory: 61.3G (OOM)
+
+
+
+
+                               + Delta Quant (Ours) Vision Reward: 0.148 Latency: 43s (3× Faster) Memory: 26.8G (2.3× Smaller)
+
+
+Figure 1. We present DeltaQuant, a 4-bit weight-activation quantization method for video diffusion models. It achieves a 2.3× memory
+reduction and is fully compatible with existing acceleration techniques. When combined with 4-step LightX2V LoRA [8], Sage Attention [53,
+55], and Radial Attention [26] on Wan2.2-I2V-A14B, DeltaQuant delivers an additional 3× speedup, generating 720p video in 43s on an
+RTX 5090 without quality degradation (Vision Reward [47]).
+
+
+                                 Abstract                                                   tokens) to 4 bits while keeping core tokens in FP8. This
+                                                                                            decomposition substantially reduces quantization error with
+Video diffusion models achieve strong generative quality but                                minimal overhead. For weight quantization, DeltaQuant
+incur prohibitive compute and memory costs, hindering de-                                   incorporates SVDQuant’s low-rank decomposition to fur-
+ployment on consumer GPUs. With attention optimizations                                     ther reduce quantization error. We also implement an ef-
+alleviating prior bottlenecks, linear layers now dominate                                   ficient kernel that translates DeltaQuant’s computational
+both computation and memory. In this work, we focus on                                      benefits into real-world speedups. Extensive experiments
+quantizing both weights and activations to 4 bits to accel-                                 on Wan2.2 I2V, Wan2.2 T2V, and LTX-Video T2V demon-
+erate these layers. Previous methods, such as SVDQuant,                                     strate that DeltaQuant maintains high generation fidelity.
+overlook the highly dynamic nature of activations across                                    On Wan2.2, it compresses model size by 2.9× and reduces
+denoising timesteps, where outlier channels and magnitudes                                  memory footprint by 2.3×. DeltaQuant is compatible with ef-
+vary dramatically. However, video data inherently exhibits                                  ficient attention mechanisms and few-step distillation. When
+strong activation similarity among neighboring tokens in                                    integrated with these techniques, it achieves an additional
+space and time, which we term spatiotemporal activation                                     3.0× acceleration, for a total 111.8× end-to-end speedup.
+similarity, analogous to how video codecs exploit intra- and
+inter-frame redundancy. Leveraging this property, we in-
+troduce DeltaQuant, which partitions activations into local                                 1. Introduction
+3D spatiotemporal cubes and uses each cube’s mean to-
+ken as a core, quantizing only the small differences (delta                                 Recent video diffusion models have achieved remarkable
+                                                                                            quality and controllability in generating videos [14, 21, 34,
+  * Equal contribution                                                                      41], enabling realistic synthesis from diverse conditioning
+
+
+
+                                                                                    43578
+                                                                            t
+                ≈                             +                         h                      ≈                    +
+                                                                                w
+     16-bit               High-Precision          Low-Precision               16-bit               High-Precision           Low-Precision
+     Weights             Low-Rank Weights        Residual Weights       Activation Tokens           Core Token               Delta Tokens
+                         (a) SVDQuant                                                          (b) DeltaQuant (Ours)
+￼
+￼
+Figure 2. Comparison of SVDQuant [24] and DeltaQuant. (a) SVDQuant decomposes weights via SVD into a high-precision low-rank
+branch and a low-bit residual during the offline calibration. The low-rank branch absorbs outliers, making the residual quantization-friendly.
+(b) DeltaQuant exploits spatiotemporal activation similarity in video data. For each small continuous t × h × w cube (e.g., 64 tokens in the
+cube), we compute its mean as a core token on the fly, which is kept in high precision, then quantize only the differences (delta tokens) to 4
+bits. These delta tokens have much smaller magnitude and far fewer outliers.
+
+
+modalities, such as text and images [41, 50]. The recent                 dynamically alleviate the outliers in activations at low cost?
+launch of Sora 2 highlights their potential for creative content             We introduce DeltaQuant, a 4-bit weight-activation quan-
+generation [33, 41, 45]. Beyond creative applications, video             tization method that leverages the nature of video to solve
+diffusion models are also emerging as powerful tools for                 this issue. Our key insight is that video data inherently
+modeling and forecasting the physical world [20, 22, 34].                exhibits spatiotemporal activation similarity, where neigh-
+    However, these models are highly computationally inten-              boring tokens in space and time tend to be relatively similar.
+sive and require enormous memory resources. The state-of-                Exploiting this property, as illustrated in Figure 2(b), we par-
+the-art (SOTA) open-source model Wan2.2 [41] exemplifies                 tition activation tensors into local 3D spatiotemporal cubes
+this challenge, with 27 billion parameters across two trans-             and designate each cube’s mean token as a core token. We
+formers. Such a substantial model size makes deployment                  quantize only the small differences from the core tokens
+on consumer GPUs like the NVIDIA RTX 5090 impractical                    (delta tokens) to 4 bits while preserving core tokens at FP8
+without CPU offloading, which incurs considerable overhead.              precision. This decomposition substantially reduces quanti-
+Moreover, the temporal dimension inherent in video mod-                  zation difficulty, as delta tokens exhibit much smaller scale
+els further amplifies computational demands. For instance,               and variance compared to the original activations. We fur-
+generating a 720p, 5-second video clip with Wan2.2 takes                 ther develop a fused kernel that natively supports our mixed-
+over 75 minutes on a 5090 GPU. Therefore, accelerating                   precision computation, translating algorithmic savings into
+the diffusion transformer and compressing the model are                  on-hardware speedups.
+imperative for practical and efficient deployment.                           Extensive experiments demonstrate that DeltaQuant pre-
+    Previous research has primarily focused on accelerating              serves the quality of SOTA models Wan2.2 [41] and LTX-
+video diffusion models through efficient attention [6, 26,               Video [14] across both image-to-video and text-to-video
+43, 49, 55, 56]. While effective, these optimizations funda-             tasks. Compared to prior quantization approaches [24, 44],
+mentally shift the computational bottleneck to linear layers,            DeltaQuant consistently achieves higher video fidelity. No-
+which now dominate inference latency. Moreover, attention                tably, DeltaQuant matches the performance of community-
+optimization alone does not reduce memory footprint, which               adopted 4-bit weight-only quantization [7] with significantly
+is critical for deployment on consumer GPUs.                             faster speed. On an RTX 5090, DeltaQuant delivers a 2.9×
+    To address both memory and linear layer efficiency, 4-bit            reduction in model size and a 2.3× reduction in memory
+weight-activation quantization presents a promising solu-                usage for Wan2.2. DeltaQuant is also fully compatible with
+tion. SVDQuant [24] demonstrates this potential for image                efficient attention mechanisms [26, 57] and few-step distil-
+diffusion models. As shown in Figure 2(a), it decomposes                 lation [8, 18, 51, 52], enabling a 112× end-to-end speedup.
+weights via singular value decomposition (SVD) into a low-               Qualitative results are presented in Figure 1.
+rank component (kept at high precision to absorb outliers)
+and a residual (quantized to 4 bits). However, SVDQuant                   2. Related Work
+overlooks the highly dynamic nature of activations in video
+diffusion models. Outlier channels and magnitudes vary                   Video diffusion models. Diffusion models [1, 3, 16, 46]
+dramatically across denoising timesteps, which is hard for               excel at image synthesis. Recent work extends these
+offline-calibrated low-rank branches to handle. While on-                capabilities to video generation [6, 14, 21, 34, 40, 41]. Early
+the-fly SVD could theoretically resolve the issue, it is pro-            video diffusion models use UNet backbones [2, 17, 35, 36],
+hibitively expensive during inference. Is there a way to                 but DiT-based architectures [14, 21, 32, 34, 40, 41] now
+
+
+
+                                                                    43579
+                                                                                        Other: 0.066 PF
+dominate due to superior performance. Video diffusion                                            Linear: 2.24 PF                 Attention: 9.75 PF
+                                                                                        BF16         (18.6%)                          (80.9%)
+models process all frames simultaneously to capture
+                                                                                                                                                 3.51×
+                                                                          +Radial &             Linear: 2.24 PF 1.14 PF
+spatiotemporal correlations, which demands substantially                 Sage Attn.                 (65.0%)     (33.1%)
+
+
+higher computational cost than image models due to the                +DeltaQuant                   1.14 PF        1.91×
+
+additional temporal dimension.                                                            Linear: 0.59 PF                                6.70×
+
+Efficient video generation. Prior work accelerates video                      ￼￼           Computations of Wan2.2 (72K tokens), measured in BF16-equivalent FLOPs
+
+diffusion models through efficient attention mechanisms,           Figure 3. Sparse attention and low-bit attention reduce the
+including quantized attention [37, 53–55, 57, 61], sparse at-      computational cost of attention in Wan2.2 by 3.5× for 72k-token
+tention [26, 43, 48, 49, 56], and linear attention [6, 29, 42].    sequences, shifting the primary bottleneck to the linear layers. Our
+While effective, these optimizations shift the computational       DeltaQuant further cuts computation by 1.9×, yielding an overall
+bottleneck to linear layers. Moreover, large model sizes still     6.7× reduction.
+require CPU offloading on consumer GPUs, creating addi-
+tional overhead. Quantizing linear layers is thus essential for                                       | Xtimestep=0 |                            | Xtimestep=20 |
+reducing both latency and memory footprint. Complemen-                              32 outlier                                       8
+
+
+
+
+                                                                       Magnitudes
+tary approaches include few-step distillation [8, 30, 31, 52]                                                       low
+and more compact latent spaces [4, 5]. Our method is com-                                                      effective bits
+patible with all these techniques. In Table 2, we demonstrate
+results that integrate our DeltaQuant with 4-step lightx2v                          0                                             0
+                                                                                                      Input Channels                              Input Channels
+LoRA [8], Radial Attention [26] and Sage Attention [53, 55].                                       hard to quantize                              hard to quantize
+Quantization reduces the bitwidth of weights and activa-                                                                    (a) Original
+tions to accelerate inference and reduce memory [10, 15,                                             | Xtimestep=0 |                             | Xtimestep=20 |
+                                                                                                                                                                    outlier
+19, 27, 28]. Recent work focuses on post-training quanti-              Magnitudes
+                                                                                    4                                            2
+zation, which requires only lightweight calibration. Quan-                                                                                      low
+tization methods fall into two categories: (1) weight-only                                                                                 effective bits
+quantization [9, 13, 27] and (2) weight-activation quantiza-
+                                                                                    0                                            0
+tion [10, 24, 28, 44, 62]. We focus on the latter, as weight-                                         Input Channels                              Input Channels
+only methods cannot accelerate computation-bounded dif-                                            easier to quantize                harder to quantize
+fusion models [24]. For diffusion models, Q-Diffusion [25]         ￼                             (b) Smoothing￼ based on X’s outliers
+                                                                                                                               ￼      when timestep = 0
+and PTQ4DM [38] achieve 8-bit quantization, while re-             Figure 4. Activation distributions across denoising timesteps. (a)
+cent methods [11, 12, 39, 59, 60] explore various config-         Video diffusion models exhibit massive outliers that vary dramati-
+urations and datatypes. For 4-bit weight-activation quan-         cally across timesteps, making quantization challenging. (b) Static
+tization, SVDQuant [24] achieves SOTA results on image            smoothing optimized for a specific timestep (e.g., step 0) reduces
+diffusion models. However, its reliance on static smooth-         outliers in that step but exacerbates distributions in other steps,
+ing for activations fails for video models, where activa-         highlighting the need for dynamic methods.
+tion outlier distributions vary dynamically across timesteps.
+GGUF [7], a popular 4-bit weight-only method, compresses
+models by 3.5× but provides no computational speedup.             into an outlier-absorbing low-rank branch and a quantization-
+Our approach addresses video’s dynamic activation patterns        friendly residual. For activations, however, it relies on
+through spatiotemporal-aware decomposition, outperform-           offline-calibrated static per-channel smoothing [44]. This as-
+ing 4-bit weight-activation methods while matching weight-        sumption breaks in video diffusion, where activation outliers
+only quality with far lower latency.                              vary substantially across denoising timesteps, as shown in
+                                                                  Figure 4. A smoothing factor calibrated for one timestep can
+3. Background                                                     worsen outliers at another, leading to severe quality degrada-
+                                                                  tion.
+Video diffusion models remain prohibitively slow for practi-          A natural question arises: can we decompose activations
+cal deployment. As shown in Figure 3, self-attention previ-       similarly to absorb outliers dynamically? Unfortunately,
+ously dominated Wan2.2, accounting for 81% of total com-          performing on-the-fly SVD during inference is prohibitively
+putation. Recent sparse [26, 43, 49, 56] and low-bit atten-       expensive. Is there a lightweight alternative to handle dy-
+tion [53, 57] reduce attention cost by up to 8.6×, shifting       namic activation outliers in video models?
+the bottleneck to linear layers, which now account for 65%
+of the workload. This makes linear-layer quantization a key        4. Method
+next step for accelerating video diffusion models.
+   SVDQuant [24] achieves 4-bit weight-activation quanti-         To address this challenge, we propose DeltaQuant, a W4A4
+zation for image diffusion models by decomposing weights          quantization method that leverages the strong spatiotempo-
+
+
+
+                                                              43580
+                                        X                                   X̄                           X̃                                                              X                                  X̄                                 X̃
+                   0.8                                   Outliers 0.8                0.8                                                         0.8                                               0.8                 0.8                                               Max
+                                                                                                                                                                               Outliers
+Activation Value
+
+
+
+
+                                                                                                                              Activation Value
+                   0.6                                            0.6                0.6                                                         0.6                                               0.6                 0.6
+
+
+                   0.4
+                                                             =    0.4
+                                                                                 +   0.4
+                                                                                                Smaller Outliers
+                                                                                                                                                 0.4
+                                                                                                                                                                                               =   0.4
+                                                                                                                                                                                                                   +   0.4
+                                                                                                                                                                                                                                            Smaller Outliers         second largest
+
+                   0.2                                            0.2                0.2                                                         0.2                                               0.2                 0.2
+                                                                                                                                                                                                                                                                     50% Percentile
+
+                    0                                              0                 0                                                           0                                                 0                   0
+                        0M    1.2M    2.3M    3.5M    4.6M             0M    1.2M        0M    1.2M    2.3M    3.5M    4.6M                            0         320     640     960    1280           0K        320         0         320     640     960    1280
+                          Frame 1 Frame 2 Frame 3 Frame 4                                  Frame 1 Frame 2 Frame 3 Frame 4                                 Token 1 Token 2 Token 3 Token 4                                       Token 1 Token 2 Token 3 Token 4
+                                 Group Index                       Group Index                    Group Index                                                     Group Index                      Group Index                          Group Index
+                   (a1) Activations of 4 Frames              (a2) Temporal Average         (a3) Delta of 4 Frames                  (b1) Activations of Local Tokens (b2) Spatial Average (b3) Delta of Local Tokens
+      ￼
+      ￼
+ Figure 5. Spatiotemporal activation similarities in Wan2.2 T2V [41]. (a1) Activation values across four consecutive frames, highlighting the
+ presence of high variance and outliers. (a2) The temporal average of frame activations, which serves to extract outliers. (a3) Delta between
+ individual frames and the temporal average, indicating minimal variance and fewer outliers. (b1) Activation values for 2×2 local tokens
+ within a single frame, demonstrating some outliers. (b2) The spatial average token, extracting the activation pattern. (b3) Delta between
+ local tokens and the spatial average, which is compact and suitable for quantization.
+
+
+ ral correlations inherent in video data. Our key insight is                                                                                                  frames, indicating that tokens at the same spatial location
+ to quantize the differences between spatiotemporally adja-                                                                                                   maintain similar distributions across the temporal dimen-
+ cent tokens rather than the original activations themselves,                                                                                                 sion. When we compute the temporal average X̄ across
+ thereby significantly reducing quantized value magnitude.                                                                                                    consecutive frames and examine the delta X̃ = X − X̄,
+ In this section, we begin by outlining the quantization pre-                                                                                                 we observe that both the magnitude and outliers are sub-
+ liminaries in Section 4.1. We then present an analysis of                                                                                                    stantially reduced (see Figure 5(a2-3)). This suggests that
+ spatiotemporal activation correlations in Section 4.2 that mo-                                                                                               temporal differences are significantly easier to quantize than
+ tivates our approach. Finally, in Section 4.3, we describe the                                                                                               the original activations.
+ complete DeltaQuant algorithm, which decomposes activa-                                                                                                      Spatial correlation. Similarly, Figure 5(b1) shows that to-
+ tions into a shared core token and fine-grained delta tokens                                                                                                 kens within a 2×2 spatial neighborhood exhibit similar dis-
+ to enable efficient mixed-precision quantization.                                                                                                            tributions. Computing a spatial average core and examining
+                                                                                                                                                              the residual again reveals reduced magnitudes and outliers
+ 4.1. Quantization Preliminaries
+                                                                                                                                                              (see Figure 5(b2-3)).
+ Quantization accelerates linear layers by representing tensors                                                                                                   These observations motivate our design of DeltaQuant:
+ with low-bit precision. For a tensor X, b-bit quantization is                                                                                                we decompose neighboring activations into a shared core
+ defined as:                                                                                                                                                  token and delta tokens, quantizing only the delta tokens to 4
+                         
+                       X                     max(|X|)                                                                                                         bits while preserving the core tokens at higher precision.
+    Q(X) = round             · sX , sX =                 , (1)
+                      sX                        qmax
+                                                                                                                                                              4.3. DeltaQuant
+ where round(·) rounds values to the nearest b-bit repre-
+ sentable value, sX is the scaling factor, and qmax is the                                                                                                    Spatiotemporal cube partitioning. Consider a linear layer
+ maximum value representable in b bits (e.g., qmax = 6 for                                                                                                    with input activations X ∈ RN ×Ci , where N = T ×H ×W
+ 4-bit floating-point). In this paper, we use Q4 (·) and Q8 (·)                                                                                               denotes the total number of tokens across T frames with spa-
+ for 4-bit and 8-bit quantization, respectively.                                                                                                              tial resolution H ×W , and Ci is the input channel dimension.
+                                                                                                                                                              We omit the batch dimension for simplicity. Video diffusion
+ 4.2. Spatiotemporal Activation Similarity                                                                                                                    models typically flatten the spatiotemporal structure into a
+ Video data exhibits strong spatiotemporal redundancy.                                                                                                        1-D sequence of length N , disrupting spatial and temporal
+ Adjacent frames differ only slightly due to temporal                                                                                                         proximity, making it difficult to identify locally correlated
+ continuity, and neighboring tokens within a frame share                                                                                                      tokens for computing meaningful core tokens.
+ similar features due to spatial locality. This fundamental                                                                                                       To preserve spatiotemporal structure, we first reshape
+ property has been exploited by classical video compression                                                                                                   X from RN ×Ci to RT ×H×W ×Ci and then partition it into
+ codecs such as H.264, which achieve high compression                                                                                                         K = N/(thw) non-overlapping spatiotemporal cubes. Each
+ ratios by encoding inter-frame differences rather than raw                                                                                                   cube of size t × h × w × Ci , where t, h, and w denote the
+ pixel values. We observe that this spatiotemporal correlation                                                                                                temporal and spatial dimensions. We denote the k-th cube
+ extends to activations in video diffusion models, presenting                                                                                                 as X (k) ∈ Rthw×Ci , as shown in Figure 6(a).
+ an opportunity to reduce quantization difficulty.                                                                                                            Core and delta token decomposition. For each spatiotem-
+ Temporal correlation. As shown in Figure 5(a1), activation                                                                                                   poral cube X (k) ∈ Rthw×Ci , we compute a shared core
+ distributions in Wan2.2 exhibit clear periodic patterns across                                                                                               token X̄ (k) ∈ R1×Ci and delta tokens X̃ (k) ∈ Rthw×Ci .
+
+
+
+                                                                                                                                       43581
+             X ∈ ℝK×(thw)×Ci                                  mean: X̄ ∈ ℝK×Ci                                              layer output for cube X (k) can be approximated as:
+     Cube 1: X (1) ∈ ℝ(thw)×Ci                                                                         Q8(X̄)
+
+
+
+
+                                           mean over tokens
+             -9.5 4.8              18.8                       -10.0 5.0        20.0            -10.0 5.0        20.0           X (k) W = (X̄ (k) + X̃ (k) )(L1 L2 + R)
+    token
+
+
+
+
+            -10.0 5.5              20.6                        -8.9 4.5        17.9             -8.9 4.5        17.9
+             10.5 4.7              20.6                        quantize over channels                                             ≈ X (k) L1 L2 + Q8 (X̄ (k) )Q4 (R) + Q4 (X̃ (k) )Q4 (R) .
+                         channel
+                                                              delta: X̃ ∈ ℝN×Ci                        Q4(X̃)                       | {z } |              {z       } |         {z       }
+                                                                                                                                       low rank        single token           low bit
+                                                               -0.5    -0.2 -1.2                -0.4    -0.2 -1.2
+                                                                0.0     0.5 0.6                  0.0     0.6 0.6                                                                        (4)
+     Cube 2: X (2) ∈ ℝ(thw)×Ci
+                                                                0.5    -0.3 0.6                  0.6    -0.3 0.6
+                                           mean over tokens
+
+
+
+
+            -8.4           4.2     16.7                        -0.5    -0.3 -1.2                -0.4    -0.3 -1.2
+                                                                                                                               5. Experiments
+    token
+
+
+
+
+            -8.9           5.0     18.5                         0.0     0.5 0.6                  0.0     0.6 0.6
+            -9.4           4.3     18.5                         0.5    -0.2 0.6                  0.6    -0.2 0.6
+                         channel                               quantize over channels
+                                                                                                                               5.1. Setups
+(a) reshape activations                                       (b) X̄ = mean(X),              (c) mixed-precision           Models. We evaluate DeltaQuant on two SOTA video dif-
+     into 3D cubes                                                X̃ = X − X̄                    quantization
+                                                                                                                           fusion models: Wan2.2 [41] and LTX-Video [14]. Wan2.2
+￼
+        ￼
+             ￼
+                 ￼
+                     ￼
+                     ￼
+Figure 6. Example workflow of DeltaQuant for token number N =                                                              is a high-quality, open-source model with 27B parameters
+6, cube number K = 2. We quantize the two mean tokens with                                                                 and dual transformers for different denoising stages. LTX-
+higher precision (FP8) and the delta tokens with lower precision                                                           Video has 13B parameters and is one of the fastest DiT-based
+(FP4). Subtracting the mean of each cube reduces the scale and                                                             models, using a video VAE with a 1:192 compression ra-
+outliers of the delta tokens, easing quantization.                                                                         tio. For Wan2.2, we generate 5-second 720p videos with 77
+                                                                                                                           frames for text-to-video and 81 frames for image-to-video.
+                                                                                                                           For LTX-Video, we produce 8-second 512p videos with 121
+We use the mean of all tokens as the core token. Formally,                                                                 frames for text-to-video.
+                                                                                                                           Metrics. Following prior work [23, 26, 43], we evaluate
+                                          thw                                                                              both video quality and similarity to 16-bit model outputs. For
+                     (k)      1 X (k)                                                                                      quality, we use Vision Reward [47] and three widely used
+            X̄             =        X ,                                 X̃ (k) = X (k) − X̄ (k) ,                  (2)
+                             thw n=1 n                                                                                     VBench [63] metrics – subject consistency (S.C.), aesthetic
+                                                                                                                           quality (A.Q.), and image quality (I.Q.). For similarity, we
+                                                                                                                           report LPIPS [58], PSNR, and SSIM.
+where X̄ (k) is broadcast to match the dimensions of X (k)
+                                                                                                                           Baselines. We compare DeltaQuant with the naive sym-
+in the subtraction. Figure 6(b) visualizes the decomposition.
+                                                                                                                           metric group quantization method and the following post-
+Mixed-precision quantization.            As discussed in Sec-                                                              training quantization (PTQ) methods:
+tion 4.2, the delta tokens X̃ are easier to quantize than X
+                                                                                                                           • SmoothQuant [44] uses a mathematically equivalent
+due to their lower scale and fewer outliers. We therefore
+                                                                                                                              per-channel transformation to redistribute activation and
+quantize X̃ to 4 bits. In contrast, the core tokens X̄ preserve
+                                                                                                                              weight quantization difficulty.
+the outliers and require higher precision. We then quantize
+                                                                                                                           • SVDQuant [24] first adopts smoothing [44] to migrate
+them to FP8. The quantization process is illustrated in Fig-
+                                                                                                                              activation outliers to weights, and then utilizes a high-
+ure 6(c). For each cube X (k) ∈ Rthw×Ci , the linear layer
+                                                                                                                              precision low-rank branch to absorb the weight outliers.
+output can be computed as:
+                                                                                                                           • S2 Q-VDiT [11] improves quantization with salient cali-
+                                                                                                                              bration data selection, targeting better calibration quality
+     X (k) W = (X̄ (k) + X̃ (k) )W                                                                                            and more effective post-quantization tuning.
+                              ≈ Q8 (X̄ (k) )Q4 (W ) + Q4 (X̃ (k) )Q4 (W ) . (3)                                            • Q-VDiT [12] uses a token-aware quantization estimator
+                                |        {z       } |          {z       }                                                     together with temporal maintenance distillation to reduce
+                                          FP8 tensorcores                               FP4 tensorcores
+                                                                                                                              quantization error.
+                                                                                                                           • GGUF 4-bit (GGUF 4) [7] is a popular 4-bit weight-only
+Here, Q8 (X̄ (k) )Q4 (W ) is computed on FP8 tensorcores                                                                      quantization scheme. It uses features like importance ma-
+and functions as a dynamic token bias that is broadcast to                                                                    trices to prioritize critical weights and improve quality.
+all thw tokens in the cube, while the other computations are                                                               Implementation details. We implement custom CUDA ker-
+performed on FP4 tensorcores. Since all tokens share the                                                                   nels based on the SVDQuant Nunchaku Engine. Specifically,
+same core, this adds only negligible overhead (e.g., 3.2%                                                                  we fuse the core token generation into the activation quanti-
+for cube size of 64) compared to directly quantizing all                                                                   zation kernel, develop a customized W4A8 GEMM (general
+activations to 4 bits, while significantly improving precision.                                                            matrix multiplication) kernel for core tokens, and integrate
+    To further reduce quantization error, DeltaQuant can be                                                                the partial sum accumulation into the W4A4 GEMM kernel
+combined with SVDQuant for weight quantization. Specifi-                                                                   of delta tokens.
+cally, SVDQuant decomposes W ∈ RCi ×Co into low-rank                                                                           For the hyperparameters of DeltaQuant, we employ a tile
+factors L1 L2 and a residual R = W −L1 L2 . The complete                                                                   size of 16 (t = 4, h = 1, w = 4) for the initial 25-30% of
+
+
+
+                                                                                                                       43582
+                                                 BF16                                                                                             SVDQuant NVFP4 (W4A4)
+                                         Vision Reward: 0.145                                                                           LPIPS: 0.165, PSNR: 21.9, Vision Reward: 0.134
+
+
+
+
+                                           GGUF 4 (W4A16)                                                                                              Ours (W4A4)
+                            LPIPS: 0.137, PSNR: 23.2, Vision Reward: 0.141                                                             LPIPS: 0.128, PSNR: 23.2, Vision Reward: 0.146
+
+
+
+
+                                                                               Prompt: A seagull is flying towards a person's hand
+                                                                                                 (a) Wan2.2-I2V
+                                                 BF16                                                                                             SVDQuant NVFP4 (W4A4)
+                                         Vision Reward: 0.091                                                                           LPIPS: 0.354, PSNR: 17.5, Vision Reward: 0.083
+
+
+
+
+                                           GGUF 4 (W4A16)                                                                                              Ours (W4A4)
+                            LPIPS: 0.334, PSNR: 17.7, Vision Reward: 0.087                                                             LPIPS: 0.338, PSNR: 17.7, Vision Reward: 0.083
+
+
+
+
+ Prompt: a majestic, ethereal guardian resembling a tiger roams gracefully through lush gardens ben image quality is vibrant and atmospheric, with lighting that creates a mysterious and otherworldly ambiance. the
+  camera moves forward through the narrow, winding alleys of kowloon city, enveloped in a light purple mist that casts a soft, ethereal glow over the scene. the towering buildings overhead are a patchwork of neon
+signs and metal balconies, their hard edges subtly softened by the mist. the eerily silent streets are devoid of any human presence, heightening the mysterious and abandoned atmosphere. litter and debris occasionally
+                         crunch underfoot, adding to the feeling of desolation as the camera subtly shakes, enhancing the immersion of the viewer into this surreal and enigmatic environment.
+                                                                                                (b) Wan2.2-T2V
+                                                 BF16                                                                                             SVDQuant NVFP4 (W4A4)
+                                         Vision Reward: 0.139                                                                           LPIPS: 0.193, PSNR: 20.1, Vision Reward: 0.130
+
+
+
+
+                                           GGUF 4 (W4A16)                                                                                              Ours (W4A4)
+                            LPIPS: 0.169, PSNR: 20.9, Vision Reward: 0.141                                                             LPIPS: 0.159, PSNR: 21.6, Vision Reward: 0.135
+
+
+
+
+                                             Prompt: A square with a statue in the middle surrounded by palm trees in a sunny day with tourists hanging around.
+                                                                                               (c) LTX-Video T2V
+
+Figure 7. Qualitative results on Wan2.2-I2V, Wan2.2-T2V, and LTX-Video show that our W4A4 algorithm effectively preserves the fidelity
+and perceptual quality of the original 16-bit model. It consistently outperforms SVDQuant (the state-of-the-art W4A4 method) and GGUF
+Q4 (the W4A16 baseline) across both similarity and quality metrics.
+
+
+denoising steps, as these are particularly critical to visual                                                    5.2. Main Results
+quality [26, 43]. For the remaining denoising steps, we use
+a tile size of 64 (t = 4, h = 2, w = 8). For the low-rank                                                       Visual quality results. Quantitative evaluations of simi-
+branches of the weights, we set the SVDQuant rank to 128                                                        larity and quality metrics across a range of video generation
+for Wan2.2 and 64 for LTX-Video. Regarding quantization,                                                        models are reported in Table 1. Across all evaluated
+all linear layers in the transformer blocks are quantized to                                                    models, our W4A4 method consistently outperforms other
+NVFP4, except for the cross-attention key/value projection                                                      W4A4/W4A6 baselines on both similarity and quality
+layers, which are quantized to 6 bits, as they operate only on                                                  metrics under matched calibration time, and achieves results
+text tokens and thus incur negligible overhead. Additionally,                                                   that are on par with, or in certain cases even surpass, the
+we apply per-group FP8 quantization to the core tokens, with                                                    higher-precision W4A16 and BF16 models. These findings
+a group size of 64.                                                                                             demonstrate the effectiveness of DeltaQuant in preserving
+                                                                                                                both similarity and perceptual quality under aggressive
+                                                                                                                quantization. See visual results at Figure 7.
+
+
+
+                                                                                                       43583
+Table 1. Quantitative evaluations of similarity and quality metrics across various models. Here, RTN denotes round-to-nearest, S.C. indicates
+subject consistency, A.Q. refers to aesthetic quality, and I.Q. denotes image quality. Our W4A4 model consistently surpasses other W4A4
+baselines in both similarity and quality metrics, closely matching the widely adopted W4A16 baseline, while effectively preserving the
+quality of the original 16-bit model.
+
+                                                                                                                               VBench
+    Model      # Parameters      Precision       Method       LPIPS (↓)    PSNR (↑)   SSIM (↑)     Vision Reward (↑)
+                                                                                                                       S.C.     A.Q.      I.Q.
+                                 BF16            Original         –           –           –              0.145         0.961    0.644     0.711
+                              NVFP W4A4            RTN          0.182        20.7       0.660            0.132         0.944    0.641     0.706
+                              NVFP W4A4        SmoothQuant      0.188        21.2       0.679            0.137         0.947    0.604     0.707
+   Wan2.2
+                   27B        NVFP W4A4         SVDQuant        0.165        21.9       0.686            0.146         0.953    0.639     0.710
+  I2V-A14B
+                              NVFP4 W4A4        S2 Q-VDiT       0.366        15.6       0.455            0.137         0.960    0.634     0.716
+                              NVFP4 W4A6         Q-VDiT         0.575        14.3       0.489           -0.0853        0.758    0.445     0.443
+                              GGUF W4A16         GGUF 4         0.137        23.2       0.755            0.141         0.961    0.644     0.707
+                              NVFP W4A4            Ours         0.128        23.2       0.742            0.143         0.960    0.639     0.716
+                                 BF16            Original         –           –           –              0.091         0.967    0.631     0.686
+                              NVFP W4A4           RTN           0.386        16.7       0.594            0.093         0.969    0.632     0.677
+                              NVFP W4A4        SmoothQuant      0.368        17.1       0.605            0.088         0.970    0.628     0.678
+   Wan2.2
+                   27B        NVFP W4A4         SVDQuant        0.354        17.5       0.616            0.083         0.969    0.630     0.680
+  T2V-A14B
+                              GGUF W4A16         GGUF 4         0.334        17.7       0.627            0.091         0.967    0.624     0.679
+                              NVFP W4A4           Ours          0.338        17.7       0.625            0.083         0.966    0.629     0.683
+                                 BF16            Original         –           –           –              0.139         0.986    0.566     0.711
+                              NVFP W4A4           RTN           0.214        19.4       0.686            0.124         0.985    0.547     0.701
+                              NVFP W4A4        SmoothQuant      0.224        19.3       0.672            0.126         0.985    0.554     0.710
+  LTXVideo
+                   13B        NVFP W4A4         SVDQuant        0.193        20.1       0.714            0.130         0.985    0.553     0.707
+  T2V-13B
+                              GGUF W4A16         GGUF 4         0.169        20.9       0.735            0.141         0.985    0.556     0.705
+                              NVFP W4A4           Ours          0.159        21.6       0.751            0.135         0.986    0.548     0.712
+
+
+
+Memory and latency results. We further evaluate the                       Table 2. Qualitative and latency results of DeltaQuant when in-
+efficiency benefits of DeltaQuant in terms of memory usage                tegrated into efficient-attention techniques and few-step LoRAs.
+and latency. As shown in Figure 8, DeltaQuant yields a                    DeltaQuant maintains high visual quality while boosting speedup
+                                                                          from 36.8× to 111.8×.
+significant reduction in memory usage, reducing the model
+size by 2.9× relative to the BF16 baseline, closely matching
+                                                                              Model       Method      Vision Reward (↑) Latency(s) Speedup
+the compression ratio of GGUF Q4. At inference time,
+DeltaQuant also reduces peak memory usage by 2.3× over                                 Original             0.145         4818            1.0×
+BF16, making it feasible to deploy the Wan-2.2 model on a                    Wan2.2   +LightX2V             0.144         196.8          24.5×
+single RTX 5090 GPU, which has 32GB of GPU memory.                          I2V-A14B +Radial&Sage           0.145         131.0          36.8×
+                                                                                     +DeltaQuant            0.148         43.1          111.8×
+    In terms of speedup, on a desktop-grade RTX 5090, our
+method achieves 4.6× faster single-step latency at 720p reso-
+lution and 7.2× at 480p resolution compared to BF16 infer-
+ence. This significantly outperforms the GGUF Q4 baseline                 yields substantial latency reductions while preserving vi-
+by 1.9× and 3.6×, respectively. Notably, on top of Ra-                    sual quality. By further incorporating DeltaQuant, latency
+dial&Sage Attention, DeltaQuant offers an additional 3.0×                 is decreased from 131.0s to just 43.1 s, achieving an overall
+speedup. These results highlight the practical advantages of              111.8× speedup without quality degradation. The corre-
+DeltaQuant, demonstrating that it delivers state-of-the-art               sponding visual results are shown in Figure 1. These results
+speedup while maintaining competitive visual quality.                     demonstrate that video diffusion models can be accelerated
+Integration with other acceleration techniques. We                        by orders of magnitude while maintaining output quality.
+also show that DeltaQuant is compatible with other video
+diffusion model acceleration techniques, including sparse
+                                                                          5.3. Ablation Studies & Analysis
+attention techniques like Radial Attention [26], quantized                Performance sensitivity to cube size. We study the effect
+attention techniques such as Sage Attention2++ [57], and                  of cube size in Figure 9(a). Increasing the cube size consis-
+few-step LoRA techniques like LightX2V [8].                               tently degrades performance because larger cubes aggregate
+    As shown in Table 2, integrating DeltaQuant with effi-                tokens with lower spatiotemporal similarity, failing to ef-
+cient attention and distillation-based acceleration techniques            fectively capture shared structure. When the cube size is
+
+
+
+                                                                   43584
+ 28                                              64                                             100                                                      52
+                                                                                                    438296.3
+ 21
+                  26.6
+                                                 48
+                                                                  61.3
+                                                                                                 75                       1.5×                           39
+                                                                                                                                                              48.2             44.6
+                                                                             2.5×      2.3×                                           2.7×
+                                                                  (OOM)
+                           3.3×      2.9×                                                                                                        4.6×                                     3.7×
+ 14                                              32                                              50                       63.4                           26                                          7.2×
+    7                                            16                          24.5      26.8      25                                   35.8               13
+                            8.2          9.2                                                                                                                                              13.2
+                                                                                                                                                 21.1                                                6.7
+    0                                             0                                                 0                                                     0
+                  BF16     GGUF 4 DeltaQuant                       BF16     GGUF 4 DeltaQuant           BF16              BF16* GGUF 4* DeltaQuant*           BF16             BF16*    GGUF 4* DeltaQuant*
+                   (a) Model Size (GiB)               (b) DiT Inference Memory (GiB)                        (c) Single Step Latency (s)                            (d) Single Step Latency (s)
+                                                             (720p Resolution)                                   (720p Resolution)                                      (480p Resolution)
+     ￼
+     ￼
+     ￼
+     ￼
+     ￼
+     ￼
+     ￼
+     ￼
+     ￼
+Figure 8. DeltaQuant reduces the size of the Wan2.2 model by 2.9× and lowers memory usage by 2.3× compared to the 16-bit model. On
+top of Sage Attention2++ [57] and Radial Attention [26], our NVFP4 W4A4 model achieves speedups of 4.6× at 720p and 7.2× at 480p
+over the 16-bit model, and outperforms the W4A16 GGUF 4 baseline, which achieves 2.7× at 720p and 3.7× at 480p. "*" denotes that
+Radial&Sage Attention are enabled.
+
+           24.0                                                  0.22                                              24.0                                                 24.0
+                                                                            SVDQuant
+           23.0                                                  0.20                                              23.0                                                 23.0
+ PSNR(↑)
+
+
+
+
+                    23.2                                                    DeltaQuant (Ours)                                           23.2                                                       23.2
+                                                      LPIPS(↓)
+
+
+
+
+                                                                                                         PSNR(↑)
+
+
+
+
+                                                                                                                                                              PSNR(↑)
+                           22.8                                                                                               22.8                                                     22.7
+           22.0                   22.3                           0.18                                              22.0                                                 22.0
+                                          21.6                                                                                                    21.9
+           21.0                                                  0.16                                              21.0                                                 21.0
+           20.0                                                  0.14                                              20.0                                                 20.0
+                                                                     53.1    53.4   53.7   54   54.3                                                                                              Timestep-
+                     16     32    64 75600                                                                                       16   8 (Ours)     4                               Uniform
+                                                                                                                                                                                                 aware(Ours)
+                                                                          #Single-step Latency
+                     Cube Size (#toks)                                    Single Step Latency (s)                         Core Token Precision (bit)                             Cube Size Allocation
+                   (a) Core Size Ablation                                   (b) Rank Ablation                              (b) Precision Ablation                               (d) Adaptive Cube Size
+
+Figure 9. Ablations of DeltaQuant. (a) Larger cube sizes degrade performance. Using a single global core for all tokens causes great PSNR
+degradation; (b) DeltaQuant consistently outperforms SVDQuant when scaling the low-rank branch across different compute budgets; (c)
+FP8 core tokens preserve accuracy; and (d) our timestep-aware cube size allocation strategy yields higher PSNR than uniform allocation.
+
+
+increased to 64, or even in the extreme case where cubes en-                                             Adaptive cube size allocation strategy. We also evalu-
+compass all tokens (resembling the global averaging in Sage                                              ate our adaptive cube-size allocation strategy. We compare
+Attention [55]), the method becomes suboptimal, with huge                                                (1) a uniform cube size of 32 (t=4, h=2, w=4) across all
+degradation in PSNR. This confirms that DeltaQuant bene-                                                 timesteps, and (2) our timestep-aware strategy, which as-
+fits from local spatiotemporal correlations within compact                                               signs a cube size of 16 to 30% of timesteps and 64 to the
+cubes rather than global aggregation.                                                                    remaining 70%, yielding an amortized cube size of 33. As
+Different rank size.        We compare DeltaQuant and                                                    shown in Figure 9(d), our adaptive strategy improves PSNR
+SVDQuant across a range of computational budgets by vary-                                                by 0.5, indicating that allocating smaller cubes in timesteps
+ing the low-rank dimension, and observe that DeltaQuant                                                  with high noise level delivers superior visual quality.
+consistently outperforms simply increasing the rank in
+SVDQuant. Figure 9(b) presents latency versus LPIPS                                                       6. Conclusion
+(lower is better) for SVDQuant at ranks 128, 160, and 192,
+and for DeltaQuant at ranks 96, 128, and 160. In all settings,                                            In this work, we introduce DeltaQuant, a 4-bit weight-
+the LPIPS–latency curve of DeltaQuant remains strictly be-                                                activation quantization method for video diffusion models.
+low that of SVDQuant, attributable to its more effective                                                  Exploiting spatiotemporal redundancy, DeltaQuant partitions
+activation quantization, thereby demonstrating a superior                                                 activations into local cubes and decomposes each cube into
+efficiency–accuracy trade-off. We also observe that when                                                  a high-precision core token and low-precision delta tokens,
+the rank in SVDQuant is too large, it fails to fully converge                                             substantially easing quantization with negligible overhead.
+within the given calibration time, which may lead to a de-                                                Experiments show that DeltaQuant preserves generation
+crease in accuracy.                                                                                       quality while significantly reducing memory usage and in-
+Precision of the core tokens. We further study the impact                                                 ference latency. It is also fully compatible with efficient
+of compute precision on the core tokens. As shown in Fig-                                                 attention and few-step distillation.
+ure 9(c), FP8 quantization achieves even higher PSNR than                                                 Broader impact. DeltaQuant enables efficient deployment
+BF16 for these tokens, while enabling 4× higher throughput                                                of video diffusion models on consumer hardware, broaden-
+via FP8 tensorcores on NVIDIA 5090 GPUs. In contrast,                                                     ing access to high-quality video generation. At the same
+quantizing the core tokens with NVFP4 results in a PSNR                                                   time, such accessibility may facilitate misuse, including the
+drop of 1.3, validating our choice of FP8 quantization.                                                   creation of misleading content.
+
+
+
+                                                                                                    43585
+Acknowledgments                                                          [13] Elias Frantar, Saleh Ashkboos, Torsten Hoefler, and Dan
+                                                                              Alistarh. GPTQ: Accurate post-training compression for gen-
+We thank MIT-IBM Watson AI Lab, Amazon, Dell,                                 erative pretrained transformers. ICLR, 2023. 3
+Hyundai Motor Company, National Science Foundation,
+                                                                         [14] Yoav HaCohen, Nisan Chiprut, Benny Brazowski, Daniel
+and MIT AI Hardware Program for supporting this research.
+                                                                              Shalem, Dudu Moshe, Eitan Richardson, Eran Levin, Guy
+                                                                              Shiran, Nir Zabari, Ori Gordon, Poriya Panet, Sapir Weiss-
+                                                                              buch, Victor Kulikov, Yaki Bitterman, Zeev Melumian, and
+References                                                                    Ofir Bibi. Ltx-video: Realtime video latent diffusion. arXiv
+ [1] Black-Forest-Labs. Flux.1, 2024. 2                                       preprint arXiv:2501.00103, 2024. 1, 2, 5
+ [2] Andreas Blattmann, Tim Dockhorn, Sumith Kulal, Daniel               [15] Song Han, Huizi Mao, and William J Dally. Deep Com-
+     Mendelevitch, Maciej Kilian, Dominik Lorenz, Yam Levi,                   pression: Compressing Deep Neural Networks with Pruning,
+     Zion English, Vikram Voleti, Adam Letts, et al. Stable                   Trained Quantization and Huffman Coding. In ICLR, 2016. 3
+     video diffusion: Scaling latent video diffusion models to           [16] Jonathan Ho, Ajay Jain, and Pieter Abbeel. Denoising diffu-
+     large datasets. arXiv preprint arXiv:2311.15127, 2023. 2                 sion probabilistic models. 2020. 2
+ [3] Junsong Chen, YU Jincheng, GE Chongjian, Lewei Yao, Enze            [17] Jonathan Ho, Tim Salimans, Alexey Gritsenko, William Chan,
+     Xie, Zhongdao Wang, James Kwok, Ping Luo, Huchuan Lu,                    Mohammad Norouzi, and David J Fleet. Video diffusion
+     and Zhenguo Li. Pixart-alpha: Fast training of diffusion                 models. 2022. 2
+     transformer for photorealistic text-to-image synthesis. In          [18] Xun Huang, Zhengqi Li, Guande He, Mingyuan Zhou, and Eli
+     ICLR, 2024. 2                                                            Shechtman. Self forcing: Bridging the train-test gap in autore-
+ [4] Junyu Chen, Han Cai, Junsong Chen, Enze Xie, Shang Yang,                 gressive video diffusion. arXiv preprint arXiv:2506.08009,
+     Haotian Tang, Muyang Li, Yao Lu, and Song Han. Deep com-                 2025. 2
+     pression autoencoder for efficient high-resolution diffusion        [19] Benoit Jacob, Skirmantas Kligys, Bo Chen, Menglong Zhu,
+     models. ICLR, 2025. 3                                                    Matthew Tang, Andrew Howard, Hartwig Adam, and Dmitry
+ [5] Junyu Chen, Wenkun He, Yuchao Gu, Yuyang Zhao, Jincheng                  Kalenichenko. Quantization and training of neural networks
+     Yu, Junsong Chen, Dongyun Zou, Yujun Lin, Zhekai Zhang,                  for efficient integer-arithmetic-only inference. In CVPR, 2018.
+     Muyang Li, et al. Dc-videogen: Efficient video generation                3
+     with deep compression video autoencoder. arXiv preprint
+                                                                         [20] Bingyi Kang, Yang Yue, Rui Lu, Zhijie Lin, Yang Zhao,
+     arXiv:2509.25182, 2025. 3
+                                                                              Kaixin Wang, Gao Huang, and Jiashi Feng. How far is video
+ [6] Junsong Chen, Yuyang Zhao, Jincheng Yu, Ruihang Chu,
+                                                                              generation from world model: A physical law perspective.
+     Junyu Chen, Shuai Yang, Xianbang Wang, Yicheng Pan,
+                                                                              arXiv preprint arXiv:2411.02385, 2024. 2
+     Daquan Zhou, Huan Ling, et al. Sana-video: Efficient video
+                                                                         [21] Weijie Kong, Qi Tian, Zijian Zhang, Rox Min, Zuozhuo Dai,
+     generation with block linear diffusion transformer. arXiv
+                                                                              Jin Zhou, Jiangfeng Xiong, Xin Li, Bo Wu, Jianwei Zhang,
+     preprint arXiv:2509.24695, 2025. 2, 3
+                                                                              et al. Hunyuanvideo: A systematic framework for large video
+ [7] city96. Comfyui-gguf: Gguf quantization support for na-
+                                                                              generative models. arXiv preprint arXiv:2412.03603, 2024.
+     tive comfyui models. https://github.com/city96/
+                                                                              1, 2
+     ComfyUI-GGUF, 2024. Accessed: 2025-10-31. 2, 3, 5
+ [8] LightX2V Contributors. Lightx2v: Light video generation in-         [22] Dacheng Li, Yunhao Fang, Yukang Chen, Shuo Yang, Shiyi
+     ference framework. https://github.com/ModelTC/                           Cao, Justin Wong, Michael Luo, Xiaolong Wang, Hongxu
+     lightx2v, 2025. 1, 2, 3, 7                                               Yin, Joseph E Gonzalez, et al. Worldmodelbench: Judging
+ [9] Tim Dettmers and Luke Zettlemoyer. The case for 4-bit pre-               video generation models as world models. arXiv preprint
+     cision: k-bit inference scaling laws. In International Confer-           arXiv:2502.20694, 2025. 2
+     ence on Machine Learning, pages 7750–7774. PMLR, 2023.              [23] Muyang Li, Tianle Cai, Jiaxin Cao, Qinsheng Zhang, Han
+     3                                                                        Cai, Junjie Bai, Yangqing Jia, Ming-Yu Liu, Kai Li, and
+[10] Tim Dettmers, Mike Lewis, Younes Belkada, and Luke Zettle-               Song Han. Distrifusion: Distributed parallel inference for
+     moyer. Gpt3. int8 (): 8-bit matrix multiplication for trans-             high-resolution diffusion models. In CVPR, 2024. 5
+     formers at scale. 2022. 3                                           [24] Muyang Li, Yujun Lin, Zhekai Zhang, Tianle Cai, Junxian
+[11] Weilun Feng, Haotong Qin, Chuanguang Yang, Xiangqi Li,                   Guo, Xiuyu Li, Enze Xie, Chenlin Meng, Jun-Yan Zhu, and
+     Han Yang, Yuqi Li, Zhulin An, Libo Huang, Michele Magno,                 Song Han. Svdquant: Absorbing outliers by low-rank compo-
+     and Yongjun Xu. S2 q-vdit: Accurate quantized video diffu-               nent for 4-bit diffusion models. In ICLR, 2025. 2, 3, 5
+     sion transformer with salient data and sparse token distillation.   [25] Xiuyu Li, Yijiang Liu, Long Lian, Huanrui Yang, Zhen
+     arXiv preprint arXiv:2508.04016, 2025. 3, 5                              Dong, Daniel Kang, Shanghang Zhang, and Kurt Keutzer.
+[12] Weilun Feng, Chuanguang Yang, Haotong Qin, Xiangqi Li,                   Q-diffusion: Quantizing diffusion models. In ICCV, 2023. 3
+     Yu Wang, Zhulin An, Libo Huang, Boyu Diao, Zixiang Zhao,            [26] Xingyang Li*, Muyang Li*, Tianle Cai, Haocheng Xi, Shuo
+     Yongjun Xu, and Michele Magno. Q-VDiT: Towards accu-                     Yang, Yujun Lin, Lvmin Zhang, Songlin Yang, Jinbo Hu,
+     rate quantization and distillation of video-generation diffusion         Kelly Peng, Maneesh Agrawala, Ion Stoica, Kurt Keutzer,
+     transformers. In Proceedings of the 42nd International Con-              and Song Han. Radial attention: O(n log n) sparse attention
+     ference on Machine Learning, pages 16956–16976. PMLR,                    with energy decay for long video generation. 2025. 1, 2, 3, 5,
+     2025. 3, 5                                                               6, 7, 8
+
+
+
+
+                                                                     43586
+[27] Ji Lin, Jiaming Tang, Haotian Tang, Shang Yang, Wei-Ming              Weng, Tong Shen, Wei Lin, Wei Wang, Wei Wang, Wen-
+     Chen, Wei-Chen Wang, Guangxuan Xiao, Xingyu Dang,                     meng Zhou, Wente Wang, Wenting Shen, Wenyuan Yu, Xi-
+     Chuang Gan, and Song Han. Awq: Activation-aware weight                anzhong Shi, Xiaoming Huang, Xin Xu, Yan Kou, Yangyu
+     quantization for on-device llm compression and acceleration.          Lv, Yifei Li, Yijing Liu, Yiming Wang, Yingya Zhang, Yi-
+     2024. 3                                                               tong Huang, Yong Li, You Wu, Yu Liu, Yulin Pan, Yun
+[28] Yujun Lin, Haotian Tang, Shang Yang, Zhekai Zhang,                    Zheng, Yuntao Hong, Yupeng Shi, Yutong Feng, Zeyinzi
+     Guangxuan Xiao, Chuang Gan, and Song Han. Qserve:                     Jiang, Zhen Han, Zhi-Fan Wu, and Ziyu Liu. Wan: Open and
+     W4a8kv4 quantization and system co-design for efficient llm           advanced large-scale video generative models. arXiv preprint
+     serving. 2025. 3                                                      arXiv:2503.20314, 2025. 1, 2, 4, 5
+[29] Songhua Liu, Weihao Yu, Zhenxiong Tan, and Xinchao Wang.         [42] Hongjie Wang, Chih-Yao Ma, Yen-Cheng Liu, Ji Hou, Tao
+     Linfusion: 1 gpu, 1 minute, 16k image. arXiv preprint                 Xu, Jialiang Wang, Felix Juefei-Xu, Yaqiao Luo, Peizhao
+     arXiv:2409.02097, 2024. 3                                             Zhang, Tingbo Hou, et al. Lingen: Towards high-resolution
+[30] Xinyin Ma, Gongfan Fang, Michael Bi Mi, and Xinchao                   minute-length text-to-video generation with linear computa-
+     Wang. Learning-to-cache: Accelerating diffusion transformer           tional complexity. In CVPR, 2025. 3
+     via layer caching. 2024. 3                                       [43] Haocheng Xi, Shuo Yang, Yilong Zhao, Chenfeng Xu,
+[31] Xinyin Ma, Gongfan Fang, and Xinchao Wang. Deepcache:                 Muyang Li, Xiuyu Li, Yujun Lin, Han Cai, Jintao Zhang,
+     Accelerating diffusion models for free. In CVPR, 2024. 3              Dacheng Li, et al. Sparse videogen: Accelerating video diffu-
+                                                                           sion transformers with spatial-temporal sparsity. 2025. 2, 3,
+[32] Xin Ma, Yaohui Wang, Gengyun Jia, Xinyuan Chen, Ziwei
+                                                                           5, 6
+     Liu, Yuan-Fang Li, Cunjian Chen, and Yu Qiao. Latte: Latent
+     diffusion transformer for video generation. arXiv preprint       [44] Guangxuan Xiao, Ji Lin, Mickael Seznec, Hao Wu, Julien De-
+     arXiv:2401.03048, 2024. 2                                             mouth, and Song Han. Smoothquant: Accurate and efficient
+                                                                           post-training quantization for large language models. 2023.
+[33] Chenlin Meng, Yutong He, Yang Song, Jiaming Song, Jiajun
+                                                                           2, 3, 5
+     Wu, Jun-Yan Zhu, and Stefano Ermon. SDEdit: Guided image
+                                                                      [45] Guangxuan Xiao, Tianwei Yin, William T. Freeman, Frédo
+     synthesis and editing with stochastic differential equations.
+                                                                           Durand, and Song Han. Fastcomposer: Tuning-free multi-
+     In ICLR, 2022. 2
+                                                                           subject image generation with localized attention. arXiv,
+[34] OpenAI. Sora: Video generation models as world simulators,
+                                                                           2023. 2
+     2024. 1, 2
+                                                                      [46] Enze Xie, Junsong Chen, Junyu Chen, Han Cai, Haotian Tang,
+[35] Dustin Podell, Zion English, Kyle Lacey, Andreas Blattmann,           Yujun Lin, Zhekai Zhang, Muyang Li, Ligeng Zhu, Yao Lu,
+     Tim Dockhorn, Jonas Müller, Joe Penna, and Robin Rombach.             et al. Sana: Efficient high-resolution image synthesis with
+     Sdxl: Improving latent diffusion models for high-resolution           linear diffusion transformers. ICLR, 2025. 2
+     image synthesis. In ICLR, 2024. 2
+                                                                      [47] Jiazheng Xu, Yu Huang, Jiale Cheng, Yuanming Yang, Jiajun
+[36] Olaf Ronneberger, Philipp Fischer, and Thomas Brox. U-                Xu, Yuan Wang, Wenbo Duan, Shen Yang, Qunlin Jin, Shu-
+     net: Convolutional networks for biomedical image segmenta-            run Li, et al. Visionreward: Fine-grained multi-dimensional
+     tion. In Medical Image Computing and Computer-Assisted                human preference learning for image and video generation.
+     Intervention–MICCAI 2015: 18th International Conference,              arXiv preprint arXiv:2412.21059, 2024. 1, 5
+     Munich, Germany, October 5-9, 2015, Proceedings, Part III        [48] Shuai Yang, Wei Huang, Ruihang Chu, Yicheng Xiao, Yuyang
+     18, pages 234–241. Springer, 2015. 2                                  Zhao, Xianbang Wang, Muyang Li, Enze Xie, Yingcong
+[37] Jay Shah, Ganesh Bikshandi, Ying Zhang, Vijay Thakkar,                Chen, Yao Lu, and Song Hanand Yukang Chen. Longlive:
+     Pradeep Ramani, and Tri Dao. Flashattention-3: Fast and               Real-time interactive long video generation. 2025. 3
+     accurate attention with asynchrony and low-precision. 2024.      [49] Shuo Yang, Haocheng Xi, Yilong Zhao, Muyang Li, Jintao
+     3                                                                     Zhang, Han Cai, Yujun Lin, Xiuyu Li, Chenfeng Xu, Kelly
+[38] Yuzhang Shang, Zhihang Yuan, Bin Xie, Bingzhe Wu, and                 Peng, et al. Sparse videogen2: Accelerate video generation
+     Yan Yan. Post-training quantization on diffusion models. In           with sparse attention via semantic-aware permutation. arXiv
+     CVPR, 2023. 3                                                         preprint arXiv:2505.18875, 2025. 2, 3
+[39] Yang Sui, Yanyu Li, Anil Kag, Yerlan Idelbayev, Junli Cao,       [50] Zhuoyi Yang, Jiayan Teng, Wendi Zheng, Ming Ding, Shiyu
+     Ju Hu, Dhritiman Sagar, Bo Yuan, Sergey Tulyakov, and Jian            Huang, Jiazheng Xu, Yuanming Yang, Wenyi Hong, Xiao-
+     Ren. Bitsfusion: 1.99 bits weight quantization of diffusion           han Zhang, Guanyu Feng, et al. Cogvideox: Text-to-video
+     model. 2024. 3                                                        diffusion models with an expert transformer. arXiv preprint
+[40] Genmo Team. Mochi 1. https://github.com/                              arXiv:2408.06072, 2024. 2
+     genmoai/models, 2024. 2                                          [51] Tianwei Yin, Michaël Gharbi, Richard Zhang, Eli Shecht-
+[41] Ang Wang, Baole Ai, Bin Wen, Chaojie Mao, Chen-Wei                    man, Frédo Durand, William T Freeman, and Taesung Park.
+     Xie, Di Chen, Feiwu Yu, Haiming Zhao, Jianxiao Yang,                  One-step diffusion with distribution matching distillation. In
+     Jianyuan Zeng, Jiayu Wang, Jingfeng Zhang, Jingren Zhou,              CVPR, 2024. 2
+     Jinkai Wang, Jixuan Chen, Kai Zhu, Kang Zhao, Keyu Yan,          [52] Tianwei Yin, Qiang Zhang, Richard Zhang, William T Free-
+     Lianghua Huang, Mengyang Feng, Ningyi Zhang, Pandeng                  man, Fredo Durand, Eli Shechtman, and Xun Huang. From
+     Li, Pingyu Wu, Ruihang Chu, Ruili Feng, Shiwei Zhang,                 slow bidirectional to fast autoregressive video diffusion mod-
+     Siyang Sun, Tao Fang, Tianxing Wang, Tianyi Gui, Tingyu               els. 2025. 2, 3
+
+
+
+
+                                                                 43587
+[53] Jintao Zhang, Haofeng Huang, Pengle Zhang, Jia Wei, Jun
+     Zhu, and Jianfei Chen. Sageattention2: Efficient attention
+     with thorough outlier smoothing and per-thread int4 quantiza-
+     tion. 2025. 1, 3
+[54] Jintao Zhang, Jia Wei, Pengle Zhang, Xiaoming Xu, Haofeng
+     Huang, Haoxu Wang, Kai Jiang, Jun Zhu, and Jianfei
+     Chen. Sageattention3: Microscaling fp4 attention for in-
+     ference and an exploration of 8-bit training. arXiv preprint
+     arXiv:2505.11594, 2025.
+[55] Jintao Zhang, Jia Wei, Pengle Zhang, Jun Zhu, and Jianfei
+     Chen. Sageattention: Accurate 8-bit attention for plug-and-
+     play inference acceleration. In ICLR, 2025. 1, 2, 3, 8
+[56] Jintao Zhang, Chendong Xiang, Haofeng Huang, Jia Wei,
+     Haocheng Xi, Jun Zhu, and Jianfei Chen. Spargeattn: Accu-
+     rate sparse attention accelerating any model inference. 2025.
+     2, 3
+[57] Jintao Zhang, Xiaoming Xu, Jia Wei, Haofeng Huang, Pengle
+     Zhang, Chendong Xiang, Jun Zhu, and Jianfei Chen. Sageat-
+     tention2++: A more efficient implementation of sageatten-
+     tion2. arXiv preprint arXiv:2505.21136, 2025. 2, 3, 7, 8
+[58] Richard Zhang, Phillip Isola, Alexei A Efros, Eli Shechtman,
+     and Oliver Wang. The unreasonable effectiveness of deep
+     features as a perceptual metric. In CVPR, 2018. 5
+[59] Tianchen Zhao, Tongcheng Fang, Enshu Liu, Wan Rui,
+     Widyadewi Soedarmadji, Shiyao Li, Zinan Lin, Guohao Dai,
+     Shengen Yan, Huazhong Yang, et al. Vidit-q: Efficient and
+     accurate quantization of diffusion transformers for image and
+     video generation. arXiv preprint arXiv:2406.02540, 2024. 3
+[60] Tianchen Zhao, Xuefei Ning, Tongcheng Fang, Enshu Liu,
+     Guyue Huang, Zinan Lin, Shengen Yan, Guohao Dai, and Yu
+     Wang. Mixdq: Memory-efficient few-step text-to-image dif-
+     fusion models with metric-decoupled mixed precision quanti-
+     zation. In ECCV, 2024. 3
+[61] Tianlang Zhao, Jun Liu, Xingyang Li, Li Ding, Jinhao Li,
+     Shuaiheng Li, Jinbo Hu, and Guohao Dai. Harnessing con-
+     ventional video processing insights for emerging 3d video
+     generation models: A comprehensive attention-aware way.
+     2025 62nd ACM/IEEE Design Automation Conference (DAC),
+     pages 1–7, 2025. 3
+[62] Yilong Zhao, Chien-Yu Lin, Kan Zhu, Zihao Ye, Lequn Chen,
+     Size Zheng, Luis Ceze, Arvind Krishnamurthy, Tianqi Chen,
+     and Baris Kasikci. Atom: Low-bit quantization for efficient
+     and accurate llm serving. 2024. 3
+[63] Dian Zheng, Ziqi Huang, Hongbo Liu, Kai Zou, Yinan He,
+     Fan Zhang, Yuanhan Zhang, Jingwen He, Wei-Shi Zheng, Yu
+     Qiao, and Ziwei Liu. Vbench-2.0: Advancing video genera-
+     tion benchmark suite for intrinsic faithfulness. arXiv preprint
+     arXiv:2311.17982, 2025. 5
+
+
+
+
+                                                                   43588
+

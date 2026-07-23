@@ -1,0 +1,71 @@
+{
+  "paths": {
+    "sf": {
+      "qvg": "results/multiprompt/sf/qvg_rep0_f180/p1/0-0_ema.mp4",
+      "factor": "results/multiprompt/sf/pcafactor_rep0_f180/p1/0-0_ema.mp4"
+    },
+    "hy": {
+      "ref": "results/multiprompt/hy/bf16_s0/0-0.mp4",
+      "qvg": "results/multiprompt/hy/qvg_s0/0-0.mp4",
+      "factor": "results/multiprompt/hy/pcafactor_s0/0-0.mp4"
+    }
+  },
+  "metrics": {
+    "sf": {
+      "qvg": {
+        "BC": 89.46,
+        "SC": 87.41,
+        "AQ": 52.34,
+        "IQ": 66.32,
+        "n": 700
+      },
+      "factor": {
+        "BC": 90.94,
+        "SC": 89.15,
+        "AQ": 53.14,
+        "IQ": 64.18,
+        "n": 700
+      }
+    },
+    "hy": {
+      "qvg": {
+        "PSNR": 17.662605088949203,
+        "SSIM": 0.4336346425116062,
+        "LPIPS": 0.38743826407007875,
+        "BC": 95.75,
+        "SC": 93.8,
+        "AQ": 62.73,
+        "IQ": 78.53,
+        "n": 173
+      },
+      "factor": {
+        "PSNR": 17.474655079841614,
+        "SSIM": 0.4420001799240708,
+        "LPIPS": 0.39403476803563536,
+        "BC": 95.75,
+        "SC": 95.05,
+        "AQ": 60.66,
+        "IQ": 77.0,
+        "n": 173
+      }
+    }
+  },
+  "deltas_factor_minus_qvg": {
+    "sf": {
+      "BC": 1.480000000000004,
+      "SC": 1.740000000000009,
+      "AQ": 0.7999999999999972,
+      "IQ": -2.1399999999999864
+    },
+    "hy": {
+      "PSNR": -0.1879500091075883,
+      "SSIM": 0.008365537412464596,
+      "LPIPS": 0.0065965039655566104,
+      "BC": 0.0,
+      "SC": 1.25,
+      "AQ": -2.0700000000000003,
+      "IQ": -1.5300000000000011
+    }
+  },
+  "pass": false
+}

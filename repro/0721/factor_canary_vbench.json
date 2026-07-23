@@ -1,0 +1,30 @@
+{
+"results/multiprompt/hy/qvg_s0/0-0.mp4::0": {
+"BC": 95.75,
+"SC": 93.8,
+"AQ": 62.73,
+"IQ": 78.53,
+"n": 173
+},
+"results/multiprompt/hy/pcafactor_s0/0-0.mp4::0": {
+"BC": 95.75,
+"SC": 95.05,
+"AQ": 60.66,
+"IQ": 77.0,
+"n": 173
+},
+"results/multiprompt/sf/qvg_rep0_f180/p1/0-0_ema.mp4::700": {
+"BC": 89.46,
+"SC": 87.41,
+"AQ": 52.34,
+"IQ": 66.32,
+"n": 700
+},
+"results/multiprompt/sf/pcafactor_rep0_f180/p1/0-0_ema.mp4::700": {
+"BC": 90.94,
+"SC": 89.15,
+"AQ": 53.14,
+"IQ": 64.18,
+"n": 700
+}
+}

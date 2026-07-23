@@ -1,0 +1,252 @@
+{
+  "candidate": "factor-only product-grid (completed Budget-PCA campaign)",
+  "arms": {
+    "lc": "pcakaxvaxfp8",
+    "sf": "pcaa128kaxvaxfp8",
+    "hy": "pcav90kpternkaxkb64fp8"
+  },
+  "orientation": "positive is better; LPIPS is QVG minus candidate",
+  "models": {
+    "lc": {
+      "PSNR": {
+        "n": 100,
+        "oriented_mean": 3.475488274884342,
+        "ci90": [
+          2.9609903149094547,
+          3.989986234859229
+        ],
+        "noninferiority_margin": 0.1,
+        "role": "primary",
+        "equivalent": false,
+        "superior": true,
+        "pass": true
+      },
+      "SSIM": {
+        "n": 100,
+        "oriented_mean": 0.03828493058681488,
+        "ci90": [
+          0.028730175859514873,
+          0.047839685314114894
+        ],
+        "noninferiority_margin": 0.002,
+        "role": "primary",
+        "equivalent": false,
+        "superior": true,
+        "pass": true
+      },
+      "LPIPS": {
+        "n": 100,
+        "oriented_mean": 0.025121833430603147,
+        "ci90": [
+          0.019824733436780553,
+          0.03041893342442574
+        ],
+        "noninferiority_margin": 0.003,
+        "role": "primary",
+        "equivalent": false,
+        "superior": true,
+        "pass": true
+      },
+      "BC": {
+        "n": 100,
+        "oriented_mean": 0.010600000000000165,
+        "ci90": [
+          -0.00500053837117998,
+          0.02620053837118031
+        ],
+        "noninferiority_margin": 0.2,
+        "role": "guardrail",
+        "equivalent": true,
+        "superior": false,
+        "pass": true
+      },
+      "IQ": {
+        "n": 100,
+        "oriented_mean": 0.020799999999999343,
+        "ci90": [
+          -0.01053324618936111,
+          0.0521332461893598
+        ],
+        "noninferiority_margin": 0.3,
+        "role": "guardrail",
+        "equivalent": true,
+        "superior": false,
+        "pass": true
+      },
+      "SC": {
+        "n": 100,
+        "oriented_mean": -0.004699999999999989,
+        "ci90": [
+          -0.018253863068244815,
+          0.008853863068244835
+        ],
+        "noninferiority_margin": 0.3,
+        "role": "guardrail",
+        "equivalent": true,
+        "superior": false,
+        "pass": true
+      },
+      "AQ": {
+        "n": 100,
+        "oriented_mean": 0.00759999999999998,
+        "ci90": [
+          -0.01309138884672423,
+          0.02829138884672419
+        ],
+        "noninferiority_margin": 0.3,
+        "role": "guardrail",
+        "equivalent": true,
+        "superior": false,
+        "pass": true
+      }
+    },
+    "sf": {
+      "BC": {
+        "n": 100,
+        "oriented_mean": 0.7094999999999995,
+        "ci90": [
+          0.550291350959621,
+          0.8687086490403779
+        ],
+        "noninferiority_margin": 0.2,
+        "role": "primary",
+        "equivalent": false,
+        "superior": true,
+        "pass": true
+      },
+      "IQ": {
+        "n": 100,
+        "oriented_mean": 0.7408999999999996,
+        "ci90": [
+          0.29213699833162254,
+          1.1896630016683765
+        ],
+        "noninferiority_margin": 0.3,
+        "role": "primary",
+        "equivalent": false,
+        "superior": true,
+        "pass": true
+      },
+      "SC": {
+        "n": 100,
+        "oriented_mean": 1.5955000000000001,
+        "ci90": [
+          1.2891941042119257,
+          1.9018058957880746
+        ],
+        "noninferiority_margin": 0.3,
+        "role": "primary",
+        "equivalent": false,
+        "superior": true,
+        "pass": true
+      },
+      "AQ": {
+        "n": 100,
+        "oriented_mean": 0.5977000000000003,
+        "ci90": [
+          0.4219558607337317,
+          0.773444139266269
+        ],
+        "noninferiority_margin": 0.3,
+        "role": "primary",
+        "equivalent": false,
+        "superior": true,
+        "pass": true
+      }
+    },
+    "hy": {
+      "PSNR": {
+        "n": 10,
+        "oriented_mean": 1.3247704814609964,
+        "ci90": [
+          1.091200930698513,
+          1.5583400322234797
+        ],
+        "noninferiority_margin": 0.1,
+        "role": "primary",
+        "equivalent": false,
+        "superior": true,
+        "pass": true
+      },
+      "SSIM": {
+        "n": 10,
+        "oriented_mean": 0.08128982769325374,
+        "ci90": [
+          0.06912719376104277,
+          0.09345246162546471
+        ],
+        "noninferiority_margin": 0.002,
+        "role": "primary",
+        "equivalent": false,
+        "superior": true,
+        "pass": true
+      },
+      "LPIPS": {
+        "n": 10,
+        "oriented_mean": 0.06001141612883657,
+        "ci90": [
+          0.051260378371714314,
+          0.06876245388595884
+        ],
+        "noninferiority_margin": 0.003,
+        "role": "primary",
+        "equivalent": false,
+        "superior": true,
+        "pass": true
+      },
+      "BC": {
+        "n": 10,
+        "oriented_mean": 0.2109999999999971,
+        "ci90": [
+          -0.19488218637101587,
+          0.6168821863710101
+        ],
+        "noninferiority_margin": 0.2,
+        "role": "guardrail",
+        "equivalent": false,
+        "superior": false,
+        "pass": false
+      },
+      "IQ": {
+        "n": 10,
+        "oriented_mean": -0.315000000000002,
+        "ci90": [
+          -0.6191378109872547,
+          -0.010862189012749213
+        ],
+        "noninferiority_margin": 0.3,
+        "role": "guardrail",
+        "equivalent": false,
+        "superior": false,
+        "pass": false
+      },
+      "SC": {
+        "n": 10,
+        "oriented_mean": 0.8590000000000003,
+        "ci90": [
+          0.653152853398407,
+          1.0648471466015936
+        ],
+        "noninferiority_margin": 0.3,
+        "role": "guardrail",
+        "equivalent": false,
+        "superior": true,
+        "pass": true
+      },
+      "AQ": {
+        "n": 10,
+        "oriented_mean": -0.48399999999999965,
+        "ci90": [
+          -1.151778885122815,
+          0.1837788851228157
+        ],
+        "noninferiority_margin": 0.3,
+        "role": "guardrail",
+        "equivalent": false,
+        "superior": false,
+        "pass": false
+      }
+    }
+  },
+  "pass": false
+}

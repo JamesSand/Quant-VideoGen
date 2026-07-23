@@ -30,6 +30,12 @@ pca_env_sf()  { export PCA_R=4 PCA_COEFF_BITS=2 PCA_RES_GRID=ternary PCA_V_MODE=
 # sweep variants (all BPE-legal; suffix after 'pca'):
 apply_variant() {  # $1 = arm string like pcar6 / pcaa128 / pcavmean / pcar6vmean / pcav90 / pcav00
   case $1 in
+    *hash*)  export PCA_GRID_HASH=1 ;;
+  esac
+  case $1 in
+    *factor*) export PCA_FACTOR_GRID=1 ;;
+  esac
+  case $1 in
     *r6*)    export PCA_R=6 ;;
   esac
   case $1 in

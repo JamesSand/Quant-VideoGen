@@ -27,7 +27,13 @@ def _patched(k, v, quant_type, quant_config, quantize_fn):
         return _orig(k, v, quant_type, quant_config, quantize_fn)
     if not _announced["done"]:
         _announced["done"] = True
-        print(f"[pca_launcher] hijacking {quant_type} -> mean/PCA fake-quant "
+        if _pq.PCA_FACTOR_GRID:
+            method = "factor-only product grid"
+        elif _pq.PCA_GRID_HASH:
+            method = "PCA-grid hash"
+        else:
+            method = "mean/PCA fake-quant"
+        print(f"[pca_launcher] hijacking {quant_type} -> {method} "
               f"(r={PCA_R}, coeff_bits={PCA_COEFF_BITS}, res={PCA_RES_GRID}, "
               f"v_mode={PCA_V_MODE}) k{tuple(k.shape)}", flush=True)
     return pca_fake_quant_kv(k, v)

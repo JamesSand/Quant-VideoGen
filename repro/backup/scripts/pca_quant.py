@@ -62,6 +62,8 @@ if K_BASIS_FILE:
 
 
 PCA_FP8SIM = os.environ.get("PCA_FP8SIM", "0") == "1"
+PCA_GRID_HASH = os.environ.get("PCA_GRID_HASH", "0") == "1"
+PCA_FACTOR_GRID = os.environ.get("PCA_FACTOR_GRID", "0") == "1"
 # M0 precheck: simulate storing quantizer metadata (scale/zero) in fp8 E4M3,
 # exactly as the real-kernel accounting assumes (kernel-plan.md).
 
@@ -692,6 +694,53 @@ _DUMP_DIR = os.environ.get("PCA_DUMP_DIR", "")
 _DUMP_N = int(os.environ.get("PCA_DUMP_N", "8"))
 
 
+@torch.no_grad()
+def _grid_hash_fake_quant_kv(k, v):
+    """Decode the actual packed PCA-grid hash payload for end-to-end tests."""
+    import sys
+    for path in ("repro/0721", "repro/0720/kernel"):
+        if path not in sys.path:
+            sys.path.insert(0, path)
+    from pca_grid_hash import grid_hash_encode_kv_fast
+    from pca_grid_hash_triton import triton_grid_hash_decode
+
+    if k.shape[-1] == 256:
+        cfg = dict(iters=1, refine=0, shared_labels="v_rope")
+    elif k.shape[-2] >= 35000:
+        cfg = dict(iters=1, refine=0, shared_labels="v")
+    else:
+        cfg = dict(iters=5, refine=1, shared_labels=None)
+    state = grid_hash_encode_kv_fast(k, v, **cfg)
+    return (
+        triton_grid_hash_decode(state["k"]).to(k.dtype),
+        triton_grid_hash_decode(state["v"]).to(v.dtype),
+    )
+
+
+@torch.no_grad()
+def _factor_grid_real_quant_kv(k, v):
+    """Actual packed factor-only product grid used by the bounded fallback."""
+    import sys
+    for path in ("repro/0721", "repro/0720/kernel"):
+        if path not in sys.path:
+            sys.path.insert(0, path)
+    from bp_quant import bp_encode_fast
+    from factor_grid_triton import triton_factor_decode
+
+    cfg = dict(
+        r=4,
+        grid="asym",
+        block=128,
+        axis="channel",
+        iters=2,
+    )
+    ks, vs = bp_encode_fast(k, **cfg), bp_encode_fast(v, **cfg)
+    return (
+        triton_factor_decode(ks, bs=64, bd=64).to(k.dtype),
+        triton_factor_decode(vs, bs=64, bd=64).to(v.dtype),
+    )
+
+
 def pca_fake_quant_kv(k, v):
     call_idx = _QW_CTR[0]
     _QW_CTR[0] += 1
@@ -700,6 +749,24 @@ def pca_fake_quant_kv(k, v):
         torch.save({"k": k.detach().to(torch.bfloat16).cpu(),
                     "v": v.detach().to(torch.bfloat16).cpu()},
                    f"{_DUMP_DIR}/chunk_{call_idx:03d}.pt")
+    if PCA_FACTOR_GRID:
+        if not getattr(pca_fake_quant_kv, "_factor_grid_announced", False):
+            pca_fake_quant_kv._factor_grid_announced = True
+            print(
+                "[pca_quant] factor-only product grid active: rank4 INT2 "
+                "coefficients + channel-axis asymmetric INT2",
+                flush=True,
+            )
+        return _factor_grid_real_quant_kv(k, v)
+    if PCA_GRID_HASH:
+        if not getattr(pca_fake_quant_kv, "_grid_hash_announced", False):
+            pca_fake_quant_kv._grid_hash_announced = True
+            print(
+                "[pca_quant] PCA-grid hash active: analytic uint8 labels + "
+                "FP8 table + channel-axis asymmetric INT2",
+                flush=True,
+            )
+        return _grid_hash_fake_quant_kv(k, v)
     if os.environ.get("PCA_QVGPRO", "") == "1":
         if not getattr(pca_fake_quant_kv, "_qvgpro_announced", False):
             pca_fake_quant_kv._qvgpro_announced = True
