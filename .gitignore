@@ -39,3 +39,4 @@ Thumbs.db
 # Logs
 *.log
 wandb/
+repro/0722/qvg4pt-demo/demo_out/
