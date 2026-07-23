@@ -34,3 +34,16 @@ pca_quant;本 demo 把 qvg4pt 一条路抽成自包含三件套,数值等价
 (`test_equivalence.py` 为证),便于单独阅读/复现。终值(10 prompts):
 PSNR 32.29 / SSIM 0.9478 / LPIPS 0.0405 @ BPE 2.589(实存,超预算 11%),
 逐 prompt 见 `repro/0721/qvg4pt-fp8-score.json`。
+
+## 实测记录(0722)
+
+1 卡 H100 pod 实跑通过,证据链:
+
+```
+PASS grid: bit-exact on (2, 4, 96, 128)          ← 拷贝版 vs 原版,格子逐位一致
+PASS full arm: bit-exact (same seed)              ← 全臂(含 kmeans)逐位一致
+[qvg4pt_launcher] hijacking naive-int2 -> qvg4pt (kmeans K=256 sub +
+  ASYM 4-level B64 residual, fp8 s/z) k(1, 32, 29640, 128)   ← 劫持生效,
+  形状 = [B=1, H=32, S=29640 条件 token, D=128],pre-RoPE
+DEMO OK: repro/0722/qvg4pt-demo/demo_out/1-0/segment_1.mp4   ← 3.7MB,moov 完整
+```
